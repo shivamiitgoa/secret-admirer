@@ -91,6 +91,16 @@ button:disabled {
   font-weight: 600;
 }
 
+.error {
+  color: #a4103b;
+  font-weight: 600;
+}
+
+.muted {
+  color: #666682;
+  font-size: 0.9rem;
+}
+
 footer {
   margin-top: 1.5rem;
   color: #666682;
