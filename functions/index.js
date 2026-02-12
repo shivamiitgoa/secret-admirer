@@ -8,6 +8,7 @@ setGlobalOptions({ region: 'asia-south1', maxInstances: 10 })
 
 const MAX_OUTGOING = 5
 const X_USERNAME_REGEX = /^[a-z0-9_]{1,15}$/
+const CALLABLE_OPTIONS = { invoker: 'public', enforceAppCheck: true }
 
 function normalizeUsername(value) {
   return String(value || '')
@@ -44,15 +45,58 @@ function extractXUserId(authToken) {
   return null
 }
 
-function extractUsernameFromRequest(request) {
-  const fromPayload = normalizeUsername(request.data?.username)
-  if (fromPayload) {
-    return fromPayload
+function extractXUsernameFromToken(authToken) {
+  return normalizeUsername(authToken?.screen_name || authToken?.screenName)
+}
+
+async function resolveVerifiedUsername({ uid, request }) {
+  const payloadUsername = normalizeUsername(request.data?.username)
+  const tokenUsername = extractXUsernameFromToken(request.auth?.token)
+
+  if (payloadUsername) {
+    assertValidXUsername(payloadUsername)
   }
 
-  // Only trust explicit X handle fields from token.
-  // Generic fields like `username` may contain placeholders such as "internal".
-  return normalizeUsername(request.auth?.token?.screen_name || request.auth?.token?.screenName)
+  if (tokenUsername) {
+    assertValidXUsername(tokenUsername)
+
+    if (payloadUsername && payloadUsername !== tokenUsername) {
+      throw new HttpsError('permission-denied', 'Username does not match your verified X session.')
+    }
+
+    return tokenUsername
+  }
+
+  const xUserId = extractXUserId(request.auth?.token)
+  if (!xUserId) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Could not verify your X username from this session. Please sign out and sign in again.'
+    )
+  }
+
+  const xIndexSnap = await db.collection('xUserIndex').doc(xUserId).get()
+  if (xIndexSnap.exists && xIndexSnap.data().uid === uid) {
+    const knownUsername = normalizeUsername(xIndexSnap.data().username)
+    if (knownUsername) {
+      assertValidXUsername(knownUsername)
+      return knownUsername
+    }
+  }
+
+  const userSnap = await db.collection('users').doc(uid).get()
+  if (userSnap.exists && userSnap.data().xUserId === xUserId) {
+    const knownUsername = normalizeUsername(userSnap.data().username)
+    if (knownUsername) {
+      assertValidXUsername(knownUsername)
+      return knownUsername
+    }
+  }
+
+  throw new HttpsError(
+    'failed-precondition',
+    'Could not verify your X username from this session. Please sign out and sign in again.'
+  )
 }
 
 async function upsertXIdentity({ uid, username, authToken }) {
@@ -123,16 +167,9 @@ async function upsertXIdentity({ uid, username, authToken }) {
   })
 }
 
-exports.syncXProfile = onCall({ invoker: 'public' }, async (request) => {
+exports.syncXProfile = onCall(CALLABLE_OPTIONS, async (request) => {
   const uid = assertXAuth(request)
-  const username = extractUsernameFromRequest(request)
-
-  if (!username) {
-    throw new HttpsError(
-      'failed-precondition',
-      'Could not read your X username from this session. Please sign out and sign in again.'
-    )
-  }
+  const username = await resolveVerifiedUsername({ uid, request })
 
   assertValidXUsername(username)
   await upsertXIdentity({ uid, username, authToken: request.auth.token })
@@ -140,9 +177,9 @@ exports.syncXProfile = onCall({ invoker: 'public' }, async (request) => {
   return { ok: true, username }
 })
 
-exports.claimUsername = onCall({ invoker: 'public' }, async (request) => {
+exports.claimUsername = onCall(CALLABLE_OPTIONS, async (request) => {
   const uid = assertXAuth(request)
-  const username = normalizeUsername(request.data?.username)
+  const username = await resolveVerifiedUsername({ uid, request })
 
   assertValidXUsername(username)
   await upsertXIdentity({ uid, username, authToken: request.auth.token })
@@ -150,7 +187,7 @@ exports.claimUsername = onCall({ invoker: 'public' }, async (request) => {
   return { ok: true, username }
 })
 
-exports.addAdmirer = onCall({ invoker: 'public' }, async (request) => {
+exports.addAdmirer = onCall(CALLABLE_OPTIONS, async (request) => {
   const fromUid = assertXAuth(request)
   const toUsername = normalizeUsername(request.data?.toUsername)
   const message = String(request.data?.message || '').trim().slice(0, 300)
@@ -247,7 +284,7 @@ exports.addAdmirer = onCall({ invoker: 'public' }, async (request) => {
   })
 })
 
-exports.getDashboard = onCall({ invoker: 'public' }, async (request) => {
+exports.getDashboard = onCall(CALLABLE_OPTIONS, async (request) => {
   const uid = assertXAuth(request)
   const userRef = db.collection('users').doc(uid)
   const statsRef = db.collection('stats').doc(uid)

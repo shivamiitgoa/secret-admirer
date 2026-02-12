@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { httpsCallable } from 'firebase/functions'
 import {
-  getAdditionalUserInfo,
   getRedirectResult,
   onAuthStateChanged,
   signInWithPopup,
@@ -9,7 +8,6 @@ import {
   signOut,
   TwitterAuthProvider,
   type User,
-  type UserCredential,
 } from 'firebase/auth'
 import './App.css'
 import { auth, functions } from './lib/firebase'
@@ -27,10 +25,6 @@ type Dashboard = {
     createdAt?: unknown | null
     matchedAt?: unknown | null
   }[]
-}
-
-type SyncXProfileRequest = {
-  username?: string
 }
 
 type SyncXProfileResponse = {
@@ -60,22 +54,6 @@ function normalizeUsername(value: unknown): string {
   }
 
   return value.trim().toLowerCase().replace(/^@+/, '')
-}
-
-function toValidXUsername(value: unknown): string | null {
-  const normalized = normalizeUsername(value)
-  return X_USERNAME_REGEX.test(normalized) ? normalized : null
-}
-
-function firstValidXUsername(values: unknown[]): string | null {
-  for (const value of values) {
-    const username = toValidXUsername(value)
-    if (username) {
-      return username
-    }
-  }
-
-  return null
 }
 
 function readErrorMessage(error: unknown, fallback: string): string {
@@ -112,27 +90,6 @@ function hasXProvider(user: User): boolean {
   return user.providerData.some((provider) => provider.providerId === 'twitter.com')
 }
 
-function extractUsernameFromCredential(credential: UserCredential): string | null {
-  const additionalInfo = getAdditionalUserInfo(credential)
-  const profile = additionalInfo?.profile
-
-  return firstValidXUsername([
-    additionalInfo?.username,
-    profile && typeof profile === 'object' ? (profile as Record<string, unknown>).screen_name : null,
-    profile && typeof profile === 'object' ? (profile as Record<string, unknown>).username : null,
-  ])
-}
-
-function extractUsernameFromUser(user: User): string | null {
-  const reloadUserInfo = (user as User & { reloadUserInfo?: Record<string, unknown> }).reloadUserInfo
-
-  return firstValidXUsername([
-    reloadUserInfo?.screenName,
-    reloadUserInfo?.screen_name,
-    reloadUserInfo?.username,
-  ])
-}
-
 function App() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
@@ -141,16 +98,14 @@ function App() {
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [dashboard, setDashboard] = useState<Dashboard | null>(null)
-  const [manualUsername, setManualUsername] = useState('')
   const [toUsername, setToUsername] = useState('')
   const [addPending, setAddPending] = useState(false)
 
-  const pendingSyncUsernameRef = useRef<string | null>(null)
   const autoSyncAttemptedRef = useRef<Set<string>>(new Set())
   const dashboardRequestIdRef = useRef(0)
 
   const syncXProfile = useMemo(
-    () => httpsCallable<SyncXProfileRequest, SyncXProfileResponse>(functions, 'syncXProfile'),
+    () => httpsCallable<Record<string, never>, SyncXProfileResponse>(functions, 'syncXProfile'),
     []
   )
   const addAdmirer = useMemo(
@@ -175,9 +130,8 @@ function App() {
   }, [getDashboard])
 
   const syncProfile = useCallback(
-    async ({ username, silent = false }: { username?: string; silent?: boolean } = {}) => {
-      const payload = username ? { username } : {}
-      const result = await syncXProfile(payload)
+    async ({ silent = false }: { silent?: boolean } = {}) => {
+      const result = await syncXProfile({})
       const syncedUsername = result.data.username
 
       if (!silent) {
@@ -194,10 +148,7 @@ function App() {
 
     const initRedirectAuth = async () => {
       try {
-        const redirectResult = await getRedirectResult(auth)
-        if (redirectResult) {
-          pendingSyncUsernameRef.current = extractUsernameFromCredential(redirectResult)
-        }
+        await getRedirectResult(auth)
       } catch (err: unknown) {
         if (active) {
           setError(readErrorMessage(err, 'X login failed. Please try again.'))
@@ -219,7 +170,6 @@ function App() {
           setUser(null)
           setDashboard(null)
           setProfileSyncing(false)
-          setManualUsername('')
           return
         }
 
@@ -228,7 +178,6 @@ function App() {
           setUser(null)
           setDashboard(null)
           setProfileSyncing(false)
-          setManualUsername('')
           return
         }
 
@@ -237,7 +186,6 @@ function App() {
 
         const dashboardData = await refreshDashboard()
         if (!dashboardData || dashboardData.username) {
-          pendingSyncUsernameRef.current = null
           return
         }
 
@@ -245,15 +193,8 @@ function App() {
           return
         }
 
-        const usernameHint = pendingSyncUsernameRef.current || extractUsernameFromUser(nextUser)
-        if (!usernameHint) {
-          autoSyncAttemptedRef.current.add(nextUser.uid)
-          return
-        }
-
         autoSyncAttemptedRef.current.add(nextUser.uid)
-        await syncProfile({ username: usernameHint, silent: true })
-        pendingSyncUsernameRef.current = null
+        await syncProfile({ silent: true })
         await refreshDashboard()
       } catch (err: unknown) {
         if (active) {
@@ -280,8 +221,7 @@ function App() {
     const provider = new TwitterAuthProvider()
 
     try {
-      const result = await signInWithPopup(auth, provider)
-      pendingSyncUsernameRef.current = extractUsernameFromCredential(result)
+      await signInWithPopup(auth, provider)
     } catch (err: unknown) {
       if (shouldFallbackToRedirect(err)) {
         await signInWithRedirect(auth, provider)
@@ -301,30 +241,24 @@ function App() {
     try {
       await signOut(auth)
       setDashboard(null)
-      setManualUsername('')
       setNotice('Signed out.')
     } catch (err: unknown) {
       setError(readErrorMessage(err, 'Could not sign out.'))
     }
   }
 
-  const handleManualSync = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleRetryProfileSync = async () => {
     setError('')
     setNotice('')
 
-    const normalizedUsername = normalizeUsername(manualUsername)
-    if (!X_USERNAME_REGEX.test(normalizedUsername)) {
-      setError('Please enter a valid X username (1-15 characters, letters, numbers, and _).')
-      return
-    }
-
     try {
-      await syncProfile({ username: normalizedUsername })
-      setManualUsername('')
+      setProfileSyncing(true)
+      await syncProfile()
       await refreshDashboard()
     } catch (err: unknown) {
-      setError(readErrorMessage(err, 'Could not sync your X username.'))
+      setError(readErrorMessage(err, 'Could not verify your X username from this session.'))
+    } finally {
+      setProfileSyncing(false)
     }
   }
 
@@ -368,7 +302,7 @@ function App() {
     X_USERNAME_REGEX.test(normalizeUsername(toUsername)) &&
     (dashboard?.outgoingCount ?? 0) < (dashboard?.maxOutgoing ?? 5)
 
-  const needsManualSync = !!user && !profileSyncing && !dashboard?.username
+  const needsProfileResync = !!user && !profileSyncing && !dashboard?.username
   const setupInProgress = !!user && profileSyncing && !dashboard?.username
 
   if (loading || setupInProgress) {
@@ -510,27 +444,16 @@ function App() {
           )}
         </form>
 
-        {needsManualSync && (
-          <form className="card" onSubmit={handleManualSync}>
-            <h2>Confirm your X username</h2>
-            <p className="muted">We could not auto-read your handle in this session. Enter it once to continue.</p>
-            <label>
-              Your X username
-              <input
-                value={manualUsername}
-                onChange={(e) => setManualUsername(e.target.value)}
-                placeholder="e.g. shivamk3r"
-                autoComplete="off"
-              />
-            </label>
-            <button
-              type="submit"
-              className="primary"
-              disabled={!X_USERNAME_REGEX.test(normalizeUsername(manualUsername))}
-            >
-              Save username
+        {needsProfileResync && (
+          <article className="card">
+            <h2>Finish profile setup</h2>
+            <p className="muted">
+              We could not verify your X username from this session. Sign out and sign in again, then retry.
+            </p>
+            <button type="button" className="primary" onClick={handleRetryProfileSync} disabled={profileSyncing}>
+              {profileSyncing ? 'Retrying...' : 'Retry profile sync'}
             </button>
-          </form>
+          </article>
         )}
       </section>
     </main>

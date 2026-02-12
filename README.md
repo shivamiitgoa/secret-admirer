@@ -20,7 +20,8 @@ X-login-only admirer app with reveal-on-match logic.
 - React + Vite
 - Firebase Hosting
 - Firestore
-- Cloud Functions (planned deployment once Blaze plan enabled)
+- Cloud Functions (2nd gen)
+- Firebase App Check (reCAPTCHA Enterprise)
 
 ## Local setup
 
@@ -33,12 +34,16 @@ X-login-only admirer app with reveal-on-match logic.
    - In your X developer app, set callback URL to:
      - `https://<your-auth-domain>/__/auth/handler`
      - Example: `https://secret-admirer-app.firebaseapp.com/__/auth/handler`
-4. Set authorized domain(s) for local + production
+4. Configure App Check for your web app:
+   - App Check -> select web app -> reCAPTCHA Enterprise
+   - Copy site key into `.env` as `VITE_FIREBASE_APPCHECK_SITE_KEY`
+   - Add allowed domains including your Hosting domains and `localhost`
+5. Set authorized domain(s) for local + production
    - Example local domain: `localhost`
-5. Install deps:
+6. Install deps:
    - `npm install`
    - `cd functions && npm install`
-6. Run app:
+7. Run app:
    - `npm run dev`
 
 ## Deploy
@@ -48,4 +53,4 @@ X-login-only admirer app with reveal-on-match logic.
 - Functions:
   - `firebase deploy --only functions`
 
-> Note: Cloud Functions deployment currently requires Blaze plan for this Firebase project.
+> Note: Callable functions enforce Firebase App Check in production.
