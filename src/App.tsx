@@ -9,22 +9,34 @@ import {
   TwitterAuthProvider,
   type User,
 } from 'firebase/auth'
+import { Link, useLocation } from 'react-router-dom'
 import './App.css'
 import { auth, functions } from './lib/firebase'
+import SettingsPage, { type SettingsBlockedUser, type SettingsReportReason } from './pages/SettingsPage'
+
+type Match = {
+  otherUid: string
+  otherUsername: string
+  createdAt?: unknown
+}
+
+type SentAdmirer = {
+  toUid: string
+  toUsername: string
+  revealed: boolean
+  createdAt?: unknown | null
+  matchedAt?: unknown | null
+}
 
 type Dashboard = {
   username: string | null
   incomingCount: number
   outgoingCount: number
   maxOutgoing: number
-  matches: { otherUid: string; otherUsername: string; createdAt?: unknown }[]
-  sentAdmirers?: {
-    toUid: string
-    toUsername: string
-    revealed: boolean
-    createdAt?: unknown | null
-    matchedAt?: unknown | null
-  }[]
+  matches: Match[]
+  sentAdmirers?: SentAdmirer[]
+  consentRequired: boolean
+  blockedUsers: SettingsBlockedUser[]
 }
 
 type SyncXProfileResponse = {
@@ -38,6 +50,46 @@ type AddAdmirerRequest = {
 type AddAdmirerResponse = {
   match: boolean
   toUsername: string
+}
+
+type AcceptPoliciesResponse = {
+  ok: boolean
+  privacyVersion: string
+  termsVersion: string
+  acceptedAt: unknown
+}
+
+type ReportUserRequest = {
+  targetUsername: string
+  reason: SettingsReportReason
+  details?: string
+}
+
+type ReportUserResponse = {
+  ok: boolean
+  reportId: string
+}
+
+type BlockUserRequest = {
+  targetUsername: string
+}
+
+type BlockUserResponse = {
+  ok: boolean
+  blockedUid: string
+  blockedUsername: string
+}
+
+type UnblockUserResponse = {
+  ok: boolean
+}
+
+type DeleteMyAccountRequest = {
+  confirmation: 'DELETE'
+}
+
+type DeleteMyAccountResponse = {
+  ok: boolean
 }
 
 const X_USERNAME_REGEX = /^[a-z0-9_]{1,15}$/
@@ -91,18 +143,35 @@ function hasXProvider(user: User): boolean {
 }
 
 function App() {
+  const location = useLocation()
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [loginPending, setLoginPending] = useState(false)
   const [profileSyncing, setProfileSyncing] = useState(false)
+  const [consentPending, setConsentPending] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [dashboard, setDashboard] = useState<Dashboard | null>(null)
+  const [loginConsentChecked, setLoginConsentChecked] = useState(false)
+
   const [toUsername, setToUsername] = useState('')
   const [addPending, setAddPending] = useState(false)
 
+  const [reportUsername, setReportUsername] = useState('')
+  const [reportReason, setReportReason] = useState<SettingsReportReason>('harassment')
+  const [reportDetails, setReportDetails] = useState('')
+  const [reportPending, setReportPending] = useState(false)
+
+  const [blockUsername, setBlockUsername] = useState('')
+  const [blockPending, setBlockPending] = useState(false)
+  const [unblockPendingUid, setUnblockPendingUid] = useState('')
+
+  const [deleteConfirmation, setDeleteConfirmation] = useState('')
+  const [deletePending, setDeletePending] = useState(false)
+
   const autoSyncAttemptedRef = useRef<Set<string>>(new Set())
   const dashboardRequestIdRef = useRef(0)
+  const isSettingsPage = location.pathname === '/settings'
 
   const syncXProfile = useMemo(
     () => httpsCallable<Record<string, never>, SyncXProfileResponse>(functions, 'syncXProfile'),
@@ -112,8 +181,25 @@ function App() {
     () => httpsCallable<AddAdmirerRequest, AddAdmirerResponse>(functions, 'addAdmirer'),
     []
   )
-  const getDashboard = useMemo(
-    () => httpsCallable<Record<string, never>, Dashboard>(functions, 'getDashboard'),
+  const getDashboard = useMemo(() => httpsCallable<Record<string, never>, Dashboard>(functions, 'getDashboard'), [])
+  const acceptPolicies = useMemo(
+    () => httpsCallable<Record<string, never>, AcceptPoliciesResponse>(functions, 'acceptPolicies'),
+    []
+  )
+  const reportUser = useMemo(
+    () => httpsCallable<ReportUserRequest, ReportUserResponse>(functions, 'reportUser'),
+    []
+  )
+  const blockUser = useMemo(
+    () => httpsCallable<BlockUserRequest, BlockUserResponse>(functions, 'blockUser'),
+    []
+  )
+  const unblockUser = useMemo(
+    () => httpsCallable<BlockUserRequest, UnblockUserResponse>(functions, 'unblockUser'),
+    []
+  )
+  const deleteMyAccount = useMemo(
+    () => httpsCallable<DeleteMyAccountRequest, DeleteMyAccountResponse>(functions, 'deleteMyAccount'),
     []
   )
 
@@ -125,8 +211,15 @@ function App() {
       return null
     }
 
-    setDashboard(result.data)
-    return result.data
+    const data = result.data
+    setDashboard({
+      ...data,
+      consentRequired: Boolean(data.consentRequired),
+      blockedUsers: data.blockedUsers || [],
+      sentAdmirers: data.sentAdmirers || [],
+      matches: data.matches || [],
+    })
+    return data
   }, [getDashboard])
 
   const syncProfile = useCallback(
@@ -170,6 +263,7 @@ function App() {
           setUser(null)
           setDashboard(null)
           setProfileSyncing(false)
+          setLoginPending(false)
           return
         }
 
@@ -215,6 +309,11 @@ function App() {
   }, [refreshDashboard, syncProfile])
 
   const handleLoginWithX = async () => {
+    if (!loginConsentChecked) {
+      setError('Please agree to Privacy Policy and Terms before continuing.')
+      return
+    }
+
     setError('')
     setNotice('')
     setLoginPending(true)
@@ -262,6 +361,22 @@ function App() {
     }
   }
 
+  const handleAcceptPolicies = async () => {
+    setError('')
+    setNotice('')
+
+    try {
+      setConsentPending(true)
+      await acceptPolicies({})
+      await refreshDashboard()
+      setNotice('Thanks. Privacy Policy and Terms accepted.')
+    } catch (err: unknown) {
+      setError(readErrorMessage(err, 'Could not record policy consent.'))
+    } finally {
+      setConsentPending(false)
+    }
+  }
+
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault()
     if (addPending) {
@@ -297,10 +412,130 @@ function App() {
     }
   }
 
+  const handleReport = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (reportPending) {
+      return
+    }
+
+    setError('')
+    setNotice('')
+    const normalizedTarget = normalizeUsername(reportUsername)
+
+    if (!X_USERNAME_REGEX.test(normalizedTarget)) {
+      setError('Enter a valid X username to report.')
+      return
+    }
+
+    setReportPending(true)
+    try {
+      const result = await reportUser({
+        targetUsername: normalizedTarget,
+        reason: reportReason,
+        details: reportDetails.trim() ? reportDetails.trim() : undefined,
+      })
+
+      setReportUsername('')
+      setReportDetails('')
+      setReportReason('harassment')
+      setNotice(`Report submitted. Reference: ${result.data.reportId}`)
+    } catch (err: unknown) {
+      setError(readErrorMessage(err, 'Could not submit report.'))
+    } finally {
+      setReportPending(false)
+    }
+  }
+
+  const handleBlock = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (blockPending) {
+      return
+    }
+
+    setError('')
+    setNotice('')
+    const normalizedTarget = normalizeUsername(blockUsername)
+
+    if (!X_USERNAME_REGEX.test(normalizedTarget)) {
+      setError('Enter a valid X username to block.')
+      return
+    }
+
+    setBlockPending(true)
+    try {
+      const result = await blockUser({ targetUsername: normalizedTarget })
+      setBlockUsername('')
+      await refreshDashboard()
+      setNotice(`Blocked @${result.data.blockedUsername}`)
+    } catch (err: unknown) {
+      setError(readErrorMessage(err, 'Could not block this user.'))
+    } finally {
+      setBlockPending(false)
+    }
+  }
+
+  const handleUnblock = async (targetUsername: string, targetUid: string) => {
+    if (unblockPendingUid) {
+      return
+    }
+
+    setError('')
+    setNotice('')
+    setUnblockPendingUid(targetUid)
+
+    try {
+      await unblockUser({ targetUsername })
+      await refreshDashboard()
+      setNotice(`Unblocked @${targetUsername}`)
+    } catch (err: unknown) {
+      setError(readErrorMessage(err, 'Could not unblock this user.'))
+    } finally {
+      setUnblockPendingUid('')
+    }
+  }
+
+  const handleDeleteAccount = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (deletePending) {
+      return
+    }
+
+    setError('')
+    setNotice('')
+
+    if (deleteConfirmation.trim() !== 'DELETE') {
+      setError('Type DELETE exactly to confirm account deletion.')
+      return
+    }
+
+    setDeletePending(true)
+    try {
+      await deleteMyAccount({ confirmation: 'DELETE' })
+      setDashboard(null)
+      setDeleteConfirmation('')
+      try {
+        await signOut(auth)
+      } catch {
+        // Ignore local sign-out race after auth record deletion.
+      }
+      setNotice('Account deleted.')
+    } catch (err: unknown) {
+      setError(readErrorMessage(err, 'Could not delete account.'))
+    } finally {
+      setDeletePending(false)
+    }
+  }
+
+  const consentRequired = Boolean(dashboard?.consentRequired)
+  const hasSyncedProfile = Boolean(dashboard?.username)
+
   const canAdd =
-    !!dashboard?.username &&
+    hasSyncedProfile &&
+    !consentRequired &&
     X_USERNAME_REGEX.test(normalizeUsername(toUsername)) &&
     (dashboard?.outgoingCount ?? 0) < (dashboard?.maxOutgoing ?? 5)
+
+  const canUseSafetyTools = hasSyncedProfile && !consentRequired
 
   const needsProfileResync = !!user && !profileSyncing && !dashboard?.username
   const setupInProgress = !!user && profileSyncing && !dashboard?.username
@@ -323,15 +558,77 @@ function App() {
           <p className="eyebrow">Private by design</p>
           <h1>Secret Admirer</h1>
           <p className="lead">
-            Log in with X, add usernames of people you like, and reveal names only when both people choose each
-            other.
+            Log in with X, add usernames of people you like, and reveal names only when both people choose each other.
           </p>
+
+          <label className="consent-row">
+            <input
+              type="checkbox"
+              checked={loginConsentChecked}
+              onChange={(e) => setLoginConsentChecked(e.target.checked)}
+            />
+            <span>
+              By continuing, you agree to the <Link to="/privacy">Privacy Policy</Link> and{' '}
+              <Link to="/terms">Terms & Acceptable Use</Link>.
+            </span>
+          </label>
+
           <div className="hero-actions">
-            <button type="button" className="primary" onClick={handleLoginWithX} disabled={loginPending}>
+            <button type="button" className="primary" onClick={handleLoginWithX} disabled={loginPending || !loginConsentChecked}>
               {loginPending ? 'Connecting to X...' : 'Continue with X'}
             </button>
           </div>
         </section>
+
+        <footer className="app-footer-links">
+          <Link to="/privacy">Privacy Policy</Link>
+          <Link to="/terms">Terms & Acceptable Use</Link>
+        </footer>
+
+        {error && <p className="alert alert-error">{error}</p>}
+        {notice && <p className="alert alert-success">{notice}</p>}
+      </main>
+    )
+  }
+
+  if (consentRequired) {
+    return (
+      <main className="page">
+        <header className="hero">
+          <div>
+            <p className="eyebrow">Secret Admirer</p>
+            <h1>Review and accept policies to continue</h1>
+            <p className="lead">Before using core app features, please accept our Privacy Policy and Terms.</p>
+          </div>
+          <div className="hero-actions">
+            {dashboard?.username ? (
+              <span className="handle-chip">@{dashboard.username}</span>
+            ) : (
+              <span className="handle-chip handle-chip-muted">Profile setup</span>
+            )}
+            <button type="button" className="ghost" onClick={handleSignOut}>
+              Sign out
+            </button>
+          </div>
+        </header>
+
+        <section className="grid">
+          <article className="card">
+            <h2>Required consent</h2>
+            <p className="muted">By continuing, you agree to our policy documents.</p>
+            <p className="muted">
+              Review: <Link to="/privacy">Privacy Policy</Link> and <Link to="/terms">Terms & Acceptable Use</Link>.
+            </p>
+            <button type="button" className="primary" onClick={handleAcceptPolicies} disabled={consentPending}>
+              {consentPending ? 'Saving consent...' : 'I agree and continue'}
+            </button>
+          </article>
+        </section>
+
+        <footer className="app-footer-links">
+          <Link to="/privacy">Privacy Policy</Link>
+          <Link to="/terms">Terms & Acceptable Use</Link>
+        </footer>
 
         {error && <p className="alert alert-error">{error}</p>}
         {notice && <p className="alert alert-success">{notice}</p>}
@@ -344,9 +641,11 @@ function App() {
       <header className="hero">
         <div>
           <p className="eyebrow">Secret Admirer</p>
-          <h1>Mutual feelings, revealed only on a match.</h1>
+          <h1>{isSettingsPage ? 'Settings and account controls' : 'Mutual feelings, revealed only on a match.'}</h1>
           <p className="lead">
-            Add X usernames privately. Names unlock for both people only when the admiration is mutual.
+            {isSettingsPage
+              ? 'Manage reporting, blocking, and account controls separately from your main dashboard.'
+              : 'Add X usernames privately. Names unlock for both people only when admiration is mutual.'}
           </p>
         </div>
         <div className="hero-actions">
@@ -354,6 +653,15 @@ function App() {
             <span className="handle-chip">@{dashboard.username}</span>
           ) : (
             <span className="handle-chip handle-chip-muted">Profile setup</span>
+          )}
+          {isSettingsPage ? (
+            <Link className="ghost-link" to="/">
+              Back to dashboard
+            </Link>
+          ) : (
+            <Link className="ghost-link" to="/settings">
+              Settings
+            </Link>
           )}
           <button type="button" className="ghost" onClick={handleSignOut}>
             Sign out
@@ -364,98 +672,126 @@ function App() {
       {error && <p className="alert alert-error">{error}</p>}
       {notice && <p className="alert alert-success">{notice}</p>}
 
-      <section className="grid">
-        <article className="card">
-          <h2>Your dashboard</h2>
-          <div className="stats-grid">
-            <div className="stat">
-              <p>Secret admirers</p>
-              <strong>{dashboard?.incomingCount ?? 0}</strong>
-            </div>
-            <div className="stat">
-              <p>Sent</p>
-              <strong>
-                {dashboard?.outgoingCount ?? 0} / {dashboard?.maxOutgoing ?? 5}
-              </strong>
-            </div>
-            <div className="stat">
-              <p>Matches</p>
-              <strong>{dashboard?.matches?.length ?? 0}</strong>
-            </div>
-          </div>
-
-          <h3>Revealed matches</h3>
-          {dashboard?.matches?.length ? (
-            <ul className="matches">
-              {dashboard.matches.map((match) => (
-                <li key={match.otherUid}>@{match.otherUsername}</li>
-              ))}
-            </ul>
-          ) : (
-            <p className="muted">No matches yet.</p>
-          )}
-
-          <h3>Sent crushes</h3>
-          {dashboard?.sentAdmirers?.length ? (
-            <ul className="sent-crushes">
-              {dashboard.sentAdmirers.map((sent) => (
-                <li key={sent.toUid}>
-                  <span className="sent-handle">@{sent.toUsername}</span>
-                  <span className={`status-pill ${sent.revealed ? 'status-pill-match' : 'status-pill-pending'}`}>
-                    {sent.revealed ? 'Matched' : 'Pending'}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="muted">No crushes added yet.</p>
-          )}
-        </article>
-
-        <form className="card" onSubmit={handleAdd} aria-busy={addPending}>
-          <h2>Add a crush</h2>
-          <p className="muted">Use their X username. We'll reveal names only if both sides match.</p>
-          <label>
-            X username
-            <div className="username-input">
-              <span className="username-prefix">@</span>
-              <input
-                className="username-input-field"
-                value={toUsername}
-                onChange={(e) => setToUsername(normalizeUsername(e.target.value))}
-                placeholder="@username"
-                autoComplete="off"
-                disabled={addPending}
-              />
-            </div>
-          </label>
-          <p className="field-hint">You can type `username` or `@username`.</p>
-          <button type="submit" className="primary" disabled={addPending || !canAdd}>
-            <span className="button-content">
-              {addPending && <span className="spinner" aria-hidden="true" />}
-              {addPending ? 'Adding...' : 'Add admirer'}
-            </span>
-          </button>
-          {(dashboard?.outgoingCount ?? 0) >= (dashboard?.maxOutgoing ?? 5) && (
-            <p className="muted">You reached your admirer limit.</p>
-          )}
-          {!dashboard?.username && (
-            <p className="muted">Finish profile setup before adding admirers.</p>
-          )}
-        </form>
-
-        {needsProfileResync && (
+      {isSettingsPage ? (
+        <SettingsPage
+          canUseSafetyTools={canUseSafetyTools}
+          reportUsername={reportUsername}
+          reportReason={reportReason}
+          reportDetails={reportDetails}
+          reportPending={reportPending}
+          onReportSubmit={handleReport}
+          onReportUsernameChange={(value) => setReportUsername(normalizeUsername(value))}
+          onReportReasonChange={setReportReason}
+          onReportDetailsChange={(value) => setReportDetails(value.slice(0, 500))}
+          blockUsername={blockUsername}
+          blockPending={blockPending}
+          onBlockSubmit={handleBlock}
+          onBlockUsernameChange={(value) => setBlockUsername(normalizeUsername(value))}
+          blockedUsers={dashboard?.blockedUsers || []}
+          unblockPendingUid={unblockPendingUid}
+          onUnblock={handleUnblock}
+          deleteConfirmation={deleteConfirmation}
+          deletePending={deletePending}
+          onDeleteSubmit={handleDeleteAccount}
+          onDeleteConfirmationChange={setDeleteConfirmation}
+        />
+      ) : (
+        <section className="grid">
           <article className="card">
-            <h2>Finish profile setup</h2>
-            <p className="muted">
-              We could not verify your X username from this session. Sign out and sign in again, then retry.
-            </p>
-            <button type="button" className="primary" onClick={handleRetryProfileSync} disabled={profileSyncing}>
-              {profileSyncing ? 'Retrying...' : 'Retry profile sync'}
-            </button>
+            <h2>Your dashboard</h2>
+            <div className="stats-grid">
+              <div className="stat">
+                <p>Secret admirers</p>
+                <strong>{dashboard?.incomingCount ?? 0}</strong>
+              </div>
+              <div className="stat">
+                <p>Sent</p>
+                <strong>
+                  {dashboard?.outgoingCount ?? 0} / {dashboard?.maxOutgoing ?? 5}
+                </strong>
+              </div>
+              <div className="stat">
+                <p>Matches</p>
+                <strong>{dashboard?.matches?.length ?? 0}</strong>
+              </div>
+            </div>
+
+            <h3>Revealed matches</h3>
+            {dashboard?.matches?.length ? (
+              <ul className="matches">
+                {dashboard.matches.map((match) => (
+                  <li key={match.otherUid}>@{match.otherUsername}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="muted">No matches yet.</p>
+            )}
+
+            <h3>Sent crushes</h3>
+            {dashboard?.sentAdmirers?.length ? (
+              <ul className="sent-crushes">
+                {dashboard.sentAdmirers.map((sent) => (
+                  <li key={sent.toUid}>
+                    <span className="sent-handle">@{sent.toUsername}</span>
+                    <span className={`status-pill ${sent.revealed ? 'status-pill-match' : 'status-pill-pending'}`}>
+                      {sent.revealed ? 'Matched' : 'Pending'}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="muted">No crushes added yet.</p>
+            )}
           </article>
-        )}
-      </section>
+
+          <form className="card" onSubmit={handleAdd} aria-busy={addPending}>
+            <h2>Add a crush</h2>
+            <p className="muted">Use their X username. We reveal names only when both sides match.</p>
+            <label>
+              X username
+              <div className="username-input">
+                <span className="username-prefix">@</span>
+                <input
+                  className="username-input-field"
+                  value={toUsername}
+                  onChange={(e) => setToUsername(normalizeUsername(e.target.value))}
+                  placeholder="@username"
+                  autoComplete="off"
+                  disabled={addPending}
+                />
+              </div>
+            </label>
+            <p className="field-hint">You can type `username` or `@username`.</p>
+            <button type="submit" className="primary" disabled={addPending || !canAdd}>
+              <span className="button-content">
+                {addPending && <span className="spinner" aria-hidden="true" />}
+                {addPending ? 'Adding...' : 'Add admirer'}
+              </span>
+            </button>
+            {(dashboard?.outgoingCount ?? 0) >= (dashboard?.maxOutgoing ?? 5) && (
+              <p className="muted">You reached your admirer limit.</p>
+            )}
+            {!dashboard?.username && <p className="muted">Finish profile setup before adding admirers.</p>}
+          </form>
+
+          {needsProfileResync && (
+            <article className="card">
+              <h2>Finish profile setup</h2>
+              <p className="muted">
+                We could not verify your X username from this session. Sign out and sign in again, then retry.
+              </p>
+              <button type="button" className="primary" onClick={handleRetryProfileSync} disabled={profileSyncing}>
+                {profileSyncing ? 'Retrying...' : 'Retry profile sync'}
+              </button>
+            </article>
+          )}
+        </section>
+      )}
+
+      <footer className="app-footer-links">
+        <Link to="/privacy">Privacy Policy</Link>
+        <Link to="/terms">Terms & Acceptable Use</Link>
+      </footer>
     </main>
   )
 }
