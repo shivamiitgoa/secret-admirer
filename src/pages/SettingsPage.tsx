@@ -1,4 +1,6 @@
 import type { FormEvent } from 'react'
+import { motion, useReducedMotion } from 'framer-motion'
+import { AlertTriangle, Ban, Flag, ShieldAlert, ShieldCheck, UserRoundX } from 'lucide-react'
 
 export type SettingsReportReason = 'harassment' | 'impersonation' | 'spam' | 'other'
 
@@ -53,39 +55,51 @@ function SettingsPage({
   onDeleteSubmit,
   onDeleteConfirmationChange,
 }: SettingsPageProps) {
+  const reduceMotion = useReducedMotion()
+
   return (
-    <section className="settings-layout">
-      <article className="card settings-intro-card">
-        <h2>Settings</h2>
-        <p className="muted">Manage safety tools and account controls. These actions are optional and usually rarely used.</p>
-      </article>
+    <section className="settings-grid">
+      <motion.article
+        className="section-block surface-panel settings-full"
+        initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+        animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
+        transition={{ duration: 0.28, ease: 'easeOut' }}
+      >
+        <h2 className="section-title">Safety Center</h2>
+        <p className="section-subtitle">
+          Reporting and blocking tools are built for trust and safety. Use them whenever someone violates boundaries.
+        </p>
+      </motion.article>
 
-      <article className="card">
-        <h2>Safety</h2>
-        <p className="muted">Report abuse and block accounts. Blocked users cannot interact with you in this app.</p>
+      <motion.article
+        className="section-block surface-panel"
+        initial={reduceMotion ? false : { opacity: 0, y: 10 }}
+        animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
+        transition={{ duration: 0.32, delay: reduceMotion ? 0 : 0.04, ease: 'easeOut' }}
+      >
+        <h2 className="section-title">Report an account</h2>
+        <p className="section-subtitle">Submit abuse reports with reason and optional context for faster review.</p>
 
-        <form onSubmit={onReportSubmit} className="stacked-form" aria-busy={reportPending}>
-          <h3>Report user</h3>
-          <label>
+        <form onSubmit={onReportSubmit} className="form-stack" aria-busy={reportPending}>
+          <label className="label">
             Target X username
-            <div className="username-input">
+            <div className="username-field">
               <span className="username-prefix">@</span>
               <input
-                className="username-input-field"
                 value={reportUsername}
-                onChange={(e) => onReportUsernameChange(e.target.value)}
-                placeholder="@username"
+                onChange={(event) => onReportUsernameChange(event.target.value)}
+                placeholder="username"
                 autoComplete="off"
                 disabled={!canUseSafetyTools || reportPending}
               />
             </div>
           </label>
 
-          <label>
+          <label className="label">
             Reason
             <select
               value={reportReason}
-              onChange={(e) => onReportReasonChange(e.target.value as SettingsReportReason)}
+              onChange={(event) => onReportReasonChange(event.target.value as SettingsReportReason)}
               disabled={!canUseSafetyTools || reportPending}
             >
               <option value="harassment">Harassment</option>
@@ -95,88 +109,121 @@ function SettingsPage({
             </select>
           </label>
 
-          <label>
+          <label className="label">
             Details (optional)
             <textarea
               value={reportDetails}
-              onChange={(e) => onReportDetailsChange(e.target.value)}
+              onChange={(event) => onReportDetailsChange(event.target.value)}
               maxLength={500}
               placeholder="Provide context for the report"
               disabled={!canUseSafetyTools || reportPending}
             />
           </label>
 
-          <button type="submit" className="ghost" disabled={!canUseSafetyTools || reportPending}>
+          <button type="submit" className="btn btn-secondary" disabled={!canUseSafetyTools || reportPending}>
+            <Flag size={16} aria-hidden="true" />
             {reportPending ? 'Submitting report...' : 'Submit report'}
           </button>
         </form>
+      </motion.article>
 
-        <form onSubmit={onBlockSubmit} className="stacked-form stacked-form-divider" aria-busy={blockPending}>
-          <h3>Block user</h3>
-          <label>
-            X username
-            <div className="username-input">
+      <motion.article
+        className="section-block surface-panel"
+        initial={reduceMotion ? false : { opacity: 0, y: 12 }}
+        animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
+        transition={{ duration: 0.34, delay: reduceMotion ? 0 : 0.06, ease: 'easeOut' }}
+      >
+        <h2 className="section-title">Blocked accounts</h2>
+        <p className="section-subtitle">Blocked users cannot interact with you in admirer flows.</p>
+
+        <form onSubmit={onBlockSubmit} className="form-stack" aria-busy={blockPending}>
+          <label className="label">
+            X username to block
+            <div className="username-field">
               <span className="username-prefix">@</span>
               <input
-                className="username-input-field"
                 value={blockUsername}
-                onChange={(e) => onBlockUsernameChange(e.target.value)}
-                placeholder="@username"
+                onChange={(event) => onBlockUsernameChange(event.target.value)}
+                placeholder="username"
                 autoComplete="off"
                 disabled={!canUseSafetyTools || blockPending}
               />
             </div>
           </label>
 
-          <button type="submit" className="ghost" disabled={!canUseSafetyTools || blockPending}>
-            {blockPending ? 'Blocking...' : 'Block user'}
+          <button type="submit" className="btn btn-secondary" disabled={!canUseSafetyTools || blockPending}>
+            <Ban size={16} aria-hidden="true" />
+            {blockPending ? 'Blocking user...' : 'Block user'}
           </button>
         </form>
 
-        <div className="stacked-form stacked-form-divider">
-          <h3>Blocked users</h3>
+        <div className="form-divider">
           {blockedUsers.length ? (
-            <ul className="blocked-list">
+            <ul className="vertical-list list-actions">
               {blockedUsers.map((blocked) => (
-                <li key={blocked.uid}>
-                  <span>@{blocked.username}</span>
+                <li key={blocked.uid} className="vertical-list-item">
+                  <span className="vertical-list-handle">@{blocked.username}</span>
                   <button
                     type="button"
-                    className="ghost"
+                    className="btn btn-secondary"
                     onClick={() => onUnblock(blocked.username, blocked.uid)}
                     disabled={Boolean(unblockPendingUid) || !canUseSafetyTools}
                   >
-                    {unblockPendingUid === blocked.uid ? 'Unblocking...' : 'Unblock'}
+                    {unblockPendingUid === blocked.uid ? (
+                      <>
+                        <ShieldAlert size={15} aria-hidden="true" /> Unblocking...
+                      </>
+                    ) : (
+                      <>
+                        <ShieldCheck size={15} aria-hidden="true" /> Unblock
+                      </>
+                    )}
                   </button>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="muted">No blocked users.</p>
+            <p className="section-empty">No blocked users yet.</p>
           )}
         </div>
-      </article>
+      </motion.article>
 
-      <form className="card" onSubmit={onDeleteSubmit} aria-busy={deletePending}>
-        <h2>Account</h2>
-        <p className="muted">
-          Deleting your account removes your profile and admirer data immediately. Reports you filed are deleted; reports
+      <motion.form
+        className="section-block surface-panel settings-full"
+        onSubmit={onDeleteSubmit}
+        aria-busy={deletePending}
+        initial={reduceMotion ? false : { opacity: 0, y: 14 }}
+        animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
+        transition={{ duration: 0.36, delay: reduceMotion ? 0 : 0.08, ease: 'easeOut' }}
+      >
+        <h2 className="section-title">Danger Zone</h2>
+        <p className="section-subtitle">
+          Account deletion removes your profile and admirer data immediately. Reports you filed are removed; reports
           received against your account are anonymized.
         </p>
-        <label>
-          Type DELETE to confirm
-          <input
-            value={deleteConfirmation}
-            onChange={(e) => onDeleteConfirmationChange(e.target.value)}
-            placeholder="DELETE"
-            autoComplete="off"
-            disabled={deletePending}
-          />
-        </label>
-        <button type="submit" className="danger" disabled={deletePending || deleteConfirmation.trim() !== 'DELETE'}>
-          {deletePending ? 'Deleting account...' : 'Delete my account'}
-        </button>
-      </form>
+
+        <div className="form-stack">
+          <label className="label">
+            Type DELETE to confirm
+            <input
+              value={deleteConfirmation}
+              onChange={(event) => onDeleteConfirmationChange(event.target.value)}
+              placeholder="DELETE"
+              autoComplete="off"
+              disabled={deletePending}
+            />
+          </label>
+
+          <button type="submit" className="btn btn-danger" disabled={deletePending || deleteConfirmation.trim() !== 'DELETE'}>
+            <AlertTriangle size={16} aria-hidden="true" />
+            {deletePending ? 'Deleting account...' : 'Delete my account'}
+          </button>
+
+          <p className="inline-note">
+            <UserRoundX size={14} aria-hidden="true" /> This action is irreversible.
+          </p>
+        </div>
+      </motion.form>
     </section>
   )
 }

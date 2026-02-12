@@ -9,8 +9,15 @@ import {
   TwitterAuthProvider,
   type User,
 } from 'firebase/auth'
+import { ArrowLeft, LogOut, Settings2 } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
-import './App.css'
+import { Toaster, toast } from 'sonner'
+import AuthGateSection from './components/sections/AuthGateSection'
+import ConsentGateSection from './components/sections/ConsentGateSection'
+import DashboardSection from './components/sections/DashboardSection'
+import LoadingScreen from './components/common/LoadingScreen'
+import StatusAlerts from './components/common/StatusAlerts'
+import AppShell from './components/layout/AppShell'
 import { auth, functions } from './lib/firebase'
 import SettingsPage, { type SettingsBlockedUser, type SettingsReportReason } from './pages/SettingsPage'
 
@@ -37,6 +44,17 @@ type Dashboard = {
   sentAdmirers?: SentAdmirer[]
   consentRequired: boolean
   blockedUsers: SettingsBlockedUser[]
+}
+
+type DashboardViewModel = {
+  username: string | null
+  incomingCount: number
+  outgoingCount: number
+  maxOutgoing: number
+  matches: Match[]
+  sentAdmirers: SentAdmirer[]
+  blockedUsers: SettingsBlockedUser[]
+  consentRequired: boolean
 }
 
 type SyncXProfileResponse = {
@@ -232,6 +250,7 @@ function App() {
 
   const autoSyncAttemptedRef = useRef<Set<string>>(new Set())
   const dashboardRequestIdRef = useRef(0)
+  const announcedToastRef = useRef({ error: '', notice: '' })
   const isSettingsPage = location.pathname === '/settings'
 
   const syncXProfile = useMemo(
@@ -378,6 +397,26 @@ function App() {
     }
   }, [refreshDashboard, syncProfile])
 
+  useEffect(() => {
+    if (error && announcedToastRef.current.error !== error) {
+      toast.error(error)
+      announcedToastRef.current.error = error
+    }
+
+    if (!error) {
+      announcedToastRef.current.error = ''
+    }
+
+    if (notice && announcedToastRef.current.notice !== notice) {
+      toast.success(notice)
+      announcedToastRef.current.notice = notice
+    }
+
+    if (!notice) {
+      announcedToastRef.current.notice = ''
+    }
+  }, [error, notice])
+
   const handleLoginWithX = async () => {
     if (!loginConsentChecked) {
       setError('Please agree to Privacy Policy and Terms before continuing.')
@@ -466,8 +505,8 @@ function App() {
     }
   }
 
-  const handleAdd = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleAdd = async (event: React.FormEvent) => {
+    event.preventDefault()
     if (addPending) {
       return
     }
@@ -501,8 +540,8 @@ function App() {
     }
   }
 
-  const handleReport = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleReport = async (event: React.FormEvent) => {
+    event.preventDefault()
     if (reportPending) {
       return
     }
@@ -535,8 +574,8 @@ function App() {
     }
   }
 
-  const handleBlock = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleBlock = async (event: React.FormEvent) => {
+    event.preventDefault()
     if (blockPending) {
       return
     }
@@ -583,8 +622,8 @@ function App() {
     }
   }
 
-  const handleDeleteAccount = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleDeleteAccount = async (event: React.FormEvent) => {
+    event.preventDefault()
     if (deletePending) {
       return
     }
@@ -615,263 +654,216 @@ function App() {
     }
   }
 
-  const consentRequired = Boolean(dashboard?.consentRequired)
-  const hasSyncedProfile = Boolean(dashboard?.username)
+  const dashboardView = useMemo<DashboardViewModel>(
+    () => ({
+      username: dashboard?.username ?? null,
+      incomingCount: dashboard?.incomingCount ?? 0,
+      outgoingCount: dashboard?.outgoingCount ?? 0,
+      maxOutgoing: dashboard?.maxOutgoing ?? 5,
+      matches: dashboard?.matches ?? [],
+      sentAdmirers: dashboard?.sentAdmirers ?? [],
+      blockedUsers: dashboard?.blockedUsers ?? [],
+      consentRequired: Boolean(dashboard?.consentRequired),
+    }),
+    [dashboard]
+  )
+
+  const consentRequired = dashboardView.consentRequired
+  const hasSyncedProfile = Boolean(dashboardView.username)
 
   const canAdd =
     hasSyncedProfile &&
     !consentRequired &&
     X_USERNAME_REGEX.test(normalizeUsername(toUsername)) &&
-    (dashboard?.outgoingCount ?? 0) < (dashboard?.maxOutgoing ?? 5)
+    dashboardView.outgoingCount < dashboardView.maxOutgoing
 
   const canUseSafetyTools = hasSyncedProfile && !consentRequired
 
-  const needsProfileResync = !!user && !profileSyncing && !dashboard?.username
-  const setupInProgress = !!user && profileSyncing && !dashboard?.username
+  const needsProfileResync = Boolean(user) && !profileSyncing && !dashboardView.username
+  const setupInProgress = Boolean(user) && profileSyncing && !dashboardView.username
+
+  const sharedFooter = (
+    <>
+      <Link to="/privacy">Privacy Policy</Link>
+      <Link to="/terms">Terms & Acceptable Use</Link>
+    </>
+  )
 
   if (loading || setupInProgress) {
     return (
-      <main className="page">
-        <section className="hero hero-shell">
-          <h1>Secret Admirer</h1>
-          <p className="lead">{setupInProgress ? 'Setting up your profile...' : 'Preparing your private space...'}</p>
-        </section>
-      </main>
+      <>
+        <Toaster richColors closeButton position="top-right" />
+        <LoadingScreen
+          title="Secret Admirer"
+          message={setupInProgress ? 'Setting up your profile...' : 'Preparing your private space...'}
+        />
+      </>
     )
   }
 
   if (!user) {
     return (
-      <main className="page">
-        <section className="hero hero-shell">
-          <p className="eyebrow">Private by design</p>
-          <h1>Secret Admirer</h1>
-          <p className="lead">
-            Log in with X, add usernames of people you like, and reveal names only when both people choose each other.
-          </p>
-
-          <label className="consent-row">
-            <input
-              type="checkbox"
-              checked={loginConsentChecked}
-              onChange={(e) => setLoginConsentChecked(e.target.checked)}
-            />
-            <span>
-              By continuing, you agree to the <Link to="/privacy">Privacy Policy</Link> and{' '}
-              <Link to="/terms">Terms & Acceptable Use</Link>.
-            </span>
-          </label>
-
-          <div className="hero-actions">
-            <button type="button" className="primary" onClick={handleLoginWithX} disabled={loginPending || !loginConsentChecked}>
-              {loginPending ? 'Connecting to X...' : 'Continue with X'}
-            </button>
-          </div>
-        </section>
-
-        {error && <p className="alert alert-error">{error}</p>}
-        {notice && <p className="alert alert-success">{notice}</p>}
-      </main>
+      <>
+        <Toaster richColors closeButton position="top-right" />
+        <AppShell
+          sectionLabel="Welcome"
+          eyebrow="Secret Space"
+          title="Private admiration without public pressure"
+          subtitle="A cinematic space for mutual signals. Names are revealed only when both people choose each other."
+          footer={sharedFooter}
+          heroAside={
+            <>
+              <div className="hero-badge">
+                <h3>Trust-first</h3>
+                <p>Safety controls and policy consent are always visible before use.</p>
+              </div>
+              <div className="hero-badge">
+                <h3>Quiet by default</h3>
+                <p>No reveal unless both users submit admiration.</p>
+              </div>
+            </>
+          }
+        >
+          <StatusAlerts error={error} notice={notice} />
+          <AuthGateSection
+            loginConsentChecked={loginConsentChecked}
+            loginPending={loginPending}
+            onConsentChange={setLoginConsentChecked}
+            onLogin={handleLoginWithX}
+          />
+        </AppShell>
+      </>
     )
   }
 
   if (consentRequired) {
     return (
-      <main className="page">
-        <header className="hero">
-          <div>
-            <p className="eyebrow">Secret Admirer</p>
-            <h1>Review and accept policies to continue</h1>
-            <p className="lead">Before using core app features, please accept our Privacy Policy and Terms.</p>
-          </div>
-          <div className="hero-actions">
-            {dashboard?.username ? (
-              <span className="handle-chip">@{dashboard.username}</span>
-            ) : (
-              <span className="handle-chip handle-chip-muted">Profile setup</span>
-            )}
-            <button type="button" className="ghost" onClick={handleSignOut}>
+      <>
+        <Toaster richColors closeButton position="top-right" />
+        <AppShell
+          sectionLabel="Consent"
+          eyebrow="Policy Gate"
+          title="Review and accept policies to continue"
+          subtitle="Before using admirer and safety features, please accept our Privacy Policy and Terms."
+          username={dashboardView.username}
+          actions={
+            <button type="button" className="btn btn-secondary" onClick={handleSignOut}>
+              <LogOut size={15} aria-hidden="true" />
               Sign out
             </button>
-          </div>
-        </header>
-
-        <section className="grid">
-          <article className="card">
-            <h2>Required consent</h2>
-            <p className="muted">By continuing, you agree to our policy documents.</p>
-            <p className="muted">
-              Review: <Link to="/privacy">Privacy Policy</Link> and <Link to="/terms">Terms & Acceptable Use</Link>.
-            </p>
-            <button type="button" className="primary" onClick={handleAcceptPolicies} disabled={consentPending}>
-              {consentPending ? 'Saving consent...' : 'I agree and continue'}
-            </button>
-          </article>
-        </section>
-
-        {error && <p className="alert alert-error">{error}</p>}
-        {notice && <p className="alert alert-success">{notice}</p>}
-      </main>
+          }
+          heroAside={
+            <>
+              <div className="hero-badge">
+                <h3>Privacy in plain terms</h3>
+                <p>Clear data handling and retention details for your account.</p>
+              </div>
+              <div className="hero-badge">
+                <h3>Single-step consent</h3>
+                <p>Accept once unless policy versions are updated.</p>
+              </div>
+            </>
+          }
+          footer={sharedFooter}
+        >
+          <StatusAlerts error={error} notice={notice} />
+          <ConsentGateSection consentPending={consentPending} onAccept={handleAcceptPolicies} />
+        </AppShell>
+      </>
     )
   }
 
   return (
-    <main className="page">
-      <header className="hero">
-        <div>
-          <p className="eyebrow">Secret Admirer</p>
-          <h1>{isSettingsPage ? 'Settings and account controls' : 'Mutual feelings, revealed only on a match.'}</h1>
-          <p className="lead">
-            {isSettingsPage
-              ? 'Manage reporting, blocking, and account controls separately from your main dashboard.'
-              : 'Add X usernames privately. Names unlock for both people only when admiration is mutual.'}
-          </p>
-        </div>
-        <div className="hero-actions">
-          {dashboard?.username ? (
-            <span className="handle-chip">@{dashboard.username}</span>
-          ) : (
-            <span className="handle-chip handle-chip-muted">Profile setup</span>
-          )}
-          {isSettingsPage ? (
-            <Link className="ghost-link" to="/">
-              Back to dashboard
-            </Link>
-          ) : (
-            <Link className="ghost-link" to="/settings">
-              Settings
-            </Link>
-          )}
-          <button type="button" className="ghost" onClick={handleSignOut}>
-            Sign out
-          </button>
-        </div>
-      </header>
-
-      {error && <p className="alert alert-error">{error}</p>}
-      {notice && <p className="alert alert-success">{notice}</p>}
-
-      {isSettingsPage ? (
-        <SettingsPage
-          canUseSafetyTools={canUseSafetyTools}
-          reportUsername={reportUsername}
-          reportReason={reportReason}
-          reportDetails={reportDetails}
-          reportPending={reportPending}
-          onReportSubmit={handleReport}
-          onReportUsernameChange={(value) => setReportUsername(normalizeUsername(value))}
-          onReportReasonChange={setReportReason}
-          onReportDetailsChange={(value) => setReportDetails(value.slice(0, 500))}
-          blockUsername={blockUsername}
-          blockPending={blockPending}
-          onBlockSubmit={handleBlock}
-          onBlockUsernameChange={(value) => setBlockUsername(normalizeUsername(value))}
-          blockedUsers={dashboard?.blockedUsers || []}
-          unblockPendingUid={unblockPendingUid}
-          onUnblock={handleUnblock}
-          deleteConfirmation={deleteConfirmation}
-          deletePending={deletePending}
-          onDeleteSubmit={handleDeleteAccount}
-          onDeleteConfirmationChange={setDeleteConfirmation}
-        />
-      ) : (
-        <section className="grid">
-          <article className="card">
-            <h2>Your dashboard</h2>
-            <div className="stats-grid">
-              <div className="stat">
-                <p>Secret admirers</p>
-                <strong>{dashboard?.incomingCount ?? 0}</strong>
-              </div>
-              <div className="stat">
-                <p>Sent</p>
-                <strong>
-                  {dashboard?.outgoingCount ?? 0} / {dashboard?.maxOutgoing ?? 5}
-                </strong>
-              </div>
-              <div className="stat">
-                <p>Matches</p>
-                <strong>{dashboard?.matches?.length ?? 0}</strong>
-              </div>
-            </div>
-
-            <h3>Revealed matches</h3>
-            {dashboard?.matches?.length ? (
-              <ul className="matches">
-                {dashboard.matches.map((match) => (
-                  <li key={match.otherUid}>@{match.otherUsername}</li>
-                ))}
-              </ul>
+    <>
+      <Toaster richColors closeButton position="top-right" />
+      <AppShell
+        sectionLabel={isSettingsPage ? 'Settings' : 'Dashboard'}
+        eyebrow={isSettingsPage ? 'Safety and Controls' : 'Mutual Reveal Experience'}
+        title={isSettingsPage ? 'Settings and account controls' : 'Mutual feelings, revealed only on a match'}
+        subtitle={
+          isSettingsPage
+            ? 'Manage reporting, blocking, and account controls without mixing them into your daily dashboard.'
+            : 'Add X usernames privately. Names unlock for both people only when admiration is mutual.'
+        }
+        username={dashboardView.username}
+        actions={
+          <>
+            {isSettingsPage ? (
+              <Link className="btn btn-secondary btn-link" to="/">
+                <ArrowLeft size={15} aria-hidden="true" />
+                Back to dashboard
+              </Link>
             ) : (
-              <p className="muted">No matches yet.</p>
+              <Link className="btn btn-secondary btn-link" to="/settings">
+                <Settings2 size={15} aria-hidden="true" />
+                Settings
+              </Link>
             )}
-
-            <h3>Sent crushes</h3>
-            {dashboard?.sentAdmirers?.length ? (
-              <ul className="sent-crushes">
-                {dashboard.sentAdmirers.map((sent) => (
-                  <li key={sent.toUid}>
-                    <span className="sent-handle">@{sent.toUsername}</span>
-                    <span className={`status-pill ${sent.revealed ? 'status-pill-match' : 'status-pill-pending'}`}>
-                      {sent.revealed ? 'Matched' : 'Pending'}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="muted">No crushes added yet.</p>
-            )}
-          </article>
-
-          <form className="card" onSubmit={handleAdd} aria-busy={addPending}>
-            <h2>Add a crush</h2>
-            <p className="muted">Use their X username. We reveal names only when both sides match.</p>
-            <label>
-              X username
-              <div className="username-input">
-                <span className="username-prefix">@</span>
-                <input
-                  className="username-input-field"
-                  value={toUsername}
-                  onChange={(e) => setToUsername(normalizeUsername(e.target.value))}
-                  placeholder="@username"
-                  autoComplete="off"
-                  disabled={addPending}
-                />
-              </div>
-            </label>
-            <p className="field-hint">You can type `username` or `@username`.</p>
-            <button type="submit" className="primary" disabled={addPending || !canAdd}>
-              <span className="button-content">
-                {addPending && <span className="spinner" aria-hidden="true" />}
-                {addPending ? 'Adding...' : 'Add admirer'}
-              </span>
+            <button type="button" className="btn btn-secondary" onClick={handleSignOut}>
+              <LogOut size={15} aria-hidden="true" />
+              Sign out
             </button>
-            {(dashboard?.outgoingCount ?? 0) >= (dashboard?.maxOutgoing ?? 5) && (
-              <p className="muted">You reached your admirer limit.</p>
-            )}
-            {!dashboard?.username && <p className="muted">Finish profile setup before adding admirers.</p>}
-          </form>
+          </>
+        }
+        heroAside={
+          <>
+            <div className="hero-badge">
+              <h3>Real-time clarity</h3>
+              <p>Track admirers, sent signals, and matches in one private timeline.</p>
+            </div>
+            <div className="hero-badge">
+              <h3>Safety first</h3>
+              <p>Report and block actions are always available from settings.</p>
+            </div>
+          </>
+        }
+        footer={sharedFooter}
+      >
+        <StatusAlerts error={error} notice={notice} />
 
-          {needsProfileResync && (
-            <article className="card">
-              <h2>Finish profile setup</h2>
-              <p className="muted">
-                We could not verify your X username from this session. Sign out and sign in again, then retry.
-              </p>
-              <button type="button" className="primary" onClick={handleRetryProfileSync} disabled={profileSyncing}>
-                {profileSyncing ? 'Retrying...' : 'Retry profile sync'}
-              </button>
-            </article>
-          )}
-        </section>
-      )}
-
-      <footer className="app-footer-links">
-        <Link to="/privacy">Privacy Policy</Link>
-        <Link to="/terms">Terms & Acceptable Use</Link>
-      </footer>
-    </main>
+        {isSettingsPage ? (
+          <SettingsPage
+            canUseSafetyTools={canUseSafetyTools}
+            reportUsername={reportUsername}
+            reportReason={reportReason}
+            reportDetails={reportDetails}
+            reportPending={reportPending}
+            onReportSubmit={handleReport}
+            onReportUsernameChange={(value) => setReportUsername(normalizeUsername(value))}
+            onReportReasonChange={setReportReason}
+            onReportDetailsChange={(value) => setReportDetails(value.slice(0, 500))}
+            blockUsername={blockUsername}
+            blockPending={blockPending}
+            onBlockSubmit={handleBlock}
+            onBlockUsernameChange={(value) => setBlockUsername(normalizeUsername(value))}
+            blockedUsers={dashboardView.blockedUsers}
+            unblockPendingUid={unblockPendingUid}
+            onUnblock={handleUnblock}
+            deleteConfirmation={deleteConfirmation}
+            deletePending={deletePending}
+            onDeleteSubmit={handleDeleteAccount}
+            onDeleteConfirmationChange={setDeleteConfirmation}
+          />
+        ) : (
+          <DashboardSection
+            incomingCount={dashboardView.incomingCount}
+            outgoingCount={dashboardView.outgoingCount}
+            maxOutgoing={dashboardView.maxOutgoing}
+            matches={dashboardView.matches}
+            sentAdmirers={dashboardView.sentAdmirers}
+            toUsername={toUsername}
+            addPending={addPending}
+            canAdd={canAdd}
+            hasSyncedProfile={hasSyncedProfile}
+            onToUsernameChange={(value) => setToUsername(normalizeUsername(value))}
+            onAddSubmit={handleAdd}
+            needsProfileResync={needsProfileResync}
+            profileSyncing={profileSyncing}
+            onRetryProfileSync={handleRetryProfileSync}
+          />
+        )}
+      </AppShell>
+    </>
   )
 }
 
