@@ -6,6 +6,9 @@ admin.initializeApp()
 const db = admin.firestore()
 setGlobalOptions({ region: 'asia-south1', maxInstances: 10 })
 
+const MAX_OUTGOING = 5
+const X_USERNAME_REGEX = /^[a-z0-9_]{1,15}$/
+
 function normalizeUsername(value) {
   return String(value || '')
     .trim()
@@ -13,35 +16,76 @@ function normalizeUsername(value) {
     .replace(/^@+/, '')
 }
 
-exports.claimUsername = onCall(async (request) => {
+function assertXAuth(request) {
   if (!request.auth?.uid) {
     throw new HttpsError('unauthenticated', 'Login required.')
   }
 
-  const uid = request.auth.uid
-  const username = normalizeUsername(request.data?.username)
-
-  if (!/^[a-z0-9._]{3,30}$/.test(username)) {
-    throw new HttpsError('invalid-argument', 'Username must be 3-30 chars: a-z, 0-9, . or _')
+  const signInProvider = request.auth.token?.firebase?.sign_in_provider
+  if (signInProvider !== 'twitter.com') {
+    throw new HttpsError('permission-denied', 'Login with X is required.')
   }
 
+  return request.auth.uid
+}
+
+function assertValidXUsername(username) {
+  if (!X_USERNAME_REGEX.test(username)) {
+    throw new HttpsError('invalid-argument', 'X username must be 1-15 chars: a-z, 0-9, or _')
+  }
+}
+
+function extractXUserId(authToken) {
+  const identities = authToken?.firebase?.identities
+  const twitterIdentities = identities?.['twitter.com']
+  if (Array.isArray(twitterIdentities) && twitterIdentities.length > 0) {
+    return String(twitterIdentities[0])
+  }
+  return null
+}
+
+function extractUsernameFromRequest(request) {
+  const fromPayload = normalizeUsername(request.data?.username)
+  if (fromPayload) {
+    return fromPayload
+  }
+
+  // Only trust explicit X handle fields from token.
+  // Generic fields like `username` may contain placeholders such as "internal".
+  return normalizeUsername(request.auth?.token?.screen_name || request.auth?.token?.screenName)
+}
+
+async function upsertXIdentity({ uid, username, authToken }) {
   const userRef = db.collection('users').doc(uid)
   const usernameRef = db.collection('usernameIndex').doc(username)
   const statsRef = db.collection('stats').doc(uid)
+  const xUserId = extractXUserId(authToken)
+  const xIndexRef = xUserId ? db.collection('xUserIndex').doc(xUserId) : null
 
   await db.runTransaction(async (tx) => {
-    const [userSnap, usernameSnap] = await Promise.all([tx.get(userRef), tx.get(usernameRef)])
+    const userSnap = await tx.get(userRef)
+    const usernameSnap = await tx.get(usernameRef)
+    const xIndexSnap = xIndexRef ? await tx.get(xIndexRef) : null
+
+    const prevUsername = userSnap.exists ? normalizeUsername(userSnap.data().username) : ''
+    const prevUsernameRef =
+      prevUsername && prevUsername !== username ? db.collection('usernameIndex').doc(prevUsername) : null
+    const prevUsernameSnap = prevUsernameRef ? await tx.get(prevUsernameRef) : null
 
     if (usernameSnap.exists && usernameSnap.data().uid !== uid) {
       throw new HttpsError('already-exists', 'Username already taken.')
     }
 
-    const prevUsername = userSnap.exists ? userSnap.data().username : null
+    if (xIndexSnap?.exists && xIndexSnap.data().uid !== uid) {
+      throw new HttpsError('permission-denied', 'This X account is already linked to another user.')
+    }
 
     tx.set(
       userRef,
       {
         username,
+        authProvider: 'twitter.com',
+        ...(xUserId ? { xUserId } : {}),
         createdAt: userSnap.exists ? userSnap.data().createdAt : admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       },
@@ -58,26 +102,60 @@ exports.claimUsername = onCall(async (request) => {
       { merge: true }
     )
 
-    tx.set(usernameRef, { uid, username, updatedAt: admin.firestore.FieldValue.serverTimestamp() })
+    tx.set(usernameRef, {
+      uid,
+      username,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
 
-    if (prevUsername && prevUsername !== username) {
-      tx.delete(db.collection('usernameIndex').doc(prevUsername))
+    if (xIndexRef) {
+      tx.set(xIndexRef, {
+        uid,
+        xUserId,
+        username,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
+    }
+
+    if (prevUsernameRef && prevUsernameSnap?.exists && prevUsernameSnap.data().uid === uid) {
+      tx.delete(prevUsernameRef)
     }
   })
+}
+
+exports.syncXProfile = onCall({ invoker: 'public' }, async (request) => {
+  const uid = assertXAuth(request)
+  const username = extractUsernameFromRequest(request)
+
+  if (!username) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Could not read your X username from this session. Please sign out and sign in again.'
+    )
+  }
+
+  assertValidXUsername(username)
+  await upsertXIdentity({ uid, username, authToken: request.auth.token })
 
   return { ok: true, username }
 })
 
-exports.addAdmirer = onCall(async (request) => {
-  if (!request.auth?.uid) {
-    throw new HttpsError('unauthenticated', 'Login required.')
-  }
+exports.claimUsername = onCall({ invoker: 'public' }, async (request) => {
+  const uid = assertXAuth(request)
+  const username = normalizeUsername(request.data?.username)
 
-  const fromUid = request.auth.uid
+  assertValidXUsername(username)
+  await upsertXIdentity({ uid, username, authToken: request.auth.token })
+
+  return { ok: true, username }
+})
+
+exports.addAdmirer = onCall({ invoker: 'public' }, async (request) => {
+  const fromUid = assertXAuth(request)
   const toUsername = normalizeUsername(request.data?.toUsername)
   const message = String(request.data?.message || '').trim().slice(0, 300)
 
-  if (!/^[a-z0-9._]{3,30}$/.test(toUsername)) {
+  if (!X_USERNAME_REGEX.test(toUsername)) {
     throw new HttpsError('invalid-argument', 'Invalid recipient username.')
   }
 
@@ -86,7 +164,7 @@ exports.addAdmirer = onCall(async (request) => {
   return db.runTransaction(async (tx) => {
     const fromUserSnap = await tx.get(fromUserRef)
     if (!fromUserSnap.exists || !fromUserSnap.data().username) {
-      throw new HttpsError('failed-precondition', 'Claim your username first.')
+      throw new HttpsError('failed-precondition', 'Your X profile is not synced. Sign out and sign in again.')
     }
 
     const fromUsername = fromUserSnap.data().username
@@ -109,15 +187,24 @@ exports.addAdmirer = onCall(async (request) => {
     const reverseEdgeId = `${toUid}_${fromUid}`
     const edgeRef = db.collection('admirations').doc(edgeId)
     const reverseRef = db.collection('admirations').doc(reverseEdgeId)
+    const toStatsRef = db.collection('stats').doc(toUid)
 
-    const [edgeSnap, reverseSnap] = await Promise.all([tx.get(edgeRef), tx.get(reverseRef)])
+    const [edgeSnap, reverseSnap, toStatsSnap] = await Promise.all([
+      tx.get(edgeRef),
+      tx.get(reverseRef),
+      tx.get(toStatsRef),
+    ])
     if (edgeSnap.exists) {
       throw new HttpsError('already-exists', 'You already added this person.')
     }
 
-    if (outgoingCount >= 5) {
-      throw new HttpsError('resource-exhausted', 'You can add max 5 secret admirers.')
+    if (outgoingCount >= MAX_OUTGOING) {
+      throw new HttpsError('resource-exhausted', `You can add max ${MAX_OUTGOING} secret admirers.`)
     }
+
+    const incomingCount = toStatsSnap.exists ? Number(toStatsSnap.data().incomingCount || 0) : 0
+    const fromMatchCount = statsSnap.exists ? Number(statsSnap.data().matchCount || 0) : 0
+    const toMatchCount = toStatsSnap.exists ? Number(toStatsSnap.data().matchCount || 0) : 0
 
     tx.set(edgeRef, {
       fromUid,
@@ -131,9 +218,6 @@ exports.addAdmirer = onCall(async (request) => {
 
     tx.set(statsRef, { outgoingCount: outgoingCount + 1 }, { merge: true })
 
-    const toStatsRef = db.collection('stats').doc(toUid)
-    const toStatsSnap = await tx.get(toStatsRef)
-    const incomingCount = toStatsSnap.exists ? Number(toStatsSnap.data().incomingCount || 0) : 0
     tx.set(toStatsRef, { incomingCount: incomingCount + 1 }, { merge: true })
 
     let match = false
@@ -155,9 +239,6 @@ exports.addAdmirer = onCall(async (request) => {
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       })
 
-      const fromStatsSnap = await tx.get(statsRef)
-      const fromMatchCount = fromStatsSnap.exists ? Number(fromStatsSnap.data().matchCount || 0) : 0
-      const toMatchCount = toStatsSnap.exists ? Number(toStatsSnap.data().matchCount || 0) : 0
       tx.set(statsRef, { matchCount: fromMatchCount + 1 }, { merge: true })
       tx.set(toStatsRef, { matchCount: toMatchCount + 1 }, { merge: true })
     }
@@ -166,12 +247,8 @@ exports.addAdmirer = onCall(async (request) => {
   })
 })
 
-exports.getDashboard = onCall(async (request) => {
-  if (!request.auth?.uid) {
-    throw new HttpsError('unauthenticated', 'Login required.')
-  }
-
-  const uid = request.auth.uid
+exports.getDashboard = onCall({ invoker: 'public' }, async (request) => {
+  const uid = assertXAuth(request)
   const userRef = db.collection('users').doc(uid)
   const statsRef = db.collection('stats').doc(uid)
 
@@ -185,7 +262,7 @@ exports.getDashboard = onCall(async (request) => {
     username: userSnap.exists ? userSnap.data().username : null,
     incomingCount: statsSnap.exists ? Number(statsSnap.data().incomingCount || 0) : 0,
     outgoingCount: statsSnap.exists ? Number(statsSnap.data().outgoingCount || 0) : 0,
-    maxOutgoing: 5,
+    maxOutgoing: MAX_OUTGOING,
     matches: matchesSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
   }
 })

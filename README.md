@@ -1,6 +1,6 @@
 # Secret Admirer (Phase 1)
 
-Username-first anonymous admirer app with reveal-on-match logic.
+X-login-only admirer app with reveal-on-match logic.
 
 ## Live URL
 
@@ -9,10 +9,9 @@ Username-first anonymous admirer app with reveal-on-match logic.
 ## Phase 1 features
 
 - Username-based identity (no email in UX)
-- Anonymous auth session for MVP
-- Claim unique username
+- Login only with X (`twitter.com` via Firebase Auth)
+- Auto-sync X username after login
 - Add up to 5 secret admirers
-- Optional secret message (up to 300 chars)
 - Reveal only if there is a two-way match
 - Dashboard with incoming count, sent count, and matches
 
@@ -28,10 +27,18 @@ Username-first anonymous admirer app with reveal-on-match logic.
 1. Copy env:
    - `cp .env.example .env`
 2. Fill Firebase web app keys in `.env`
-3. Install deps:
+3. In Firebase Console, enable Auth provider:
+   - Authentication -> Sign-in method -> `Twitter` provider
+   - Add your X API key + API secret
+   - In your X developer app, set callback URL to:
+     - `https://<your-auth-domain>/__/auth/handler`
+     - Example: `https://secret-admirer-app.firebaseapp.com/__/auth/handler`
+4. Set authorized domain(s) for local + production
+   - Example local domain: `localhost`
+5. Install deps:
    - `npm install`
    - `cd functions && npm install`
-4. Run app:
+6. Run app:
    - `npm run dev`
 
 ## Deploy
