@@ -93,12 +93,17 @@ type DeleteMyAccountResponse = {
 }
 
 const X_USERNAME_REGEX = /^[a-z0-9_]{1,15}$/
+const AUTH_REDIRECT_RECOVERY_KEY = 'sa_auth_redirect_recovery'
 
-const REDIRECT_FALLBACK_CODES = new Set([
+const REDIRECT_RECOVERY_CODES = new Set([
   'auth/popup-blocked',
   'auth/web-storage-unsupported',
   'auth/operation-not-supported-in-this-environment',
+  'auth/popup-closed-by-user',
+  'auth/cancelled-popup-request',
 ])
+
+const SOFT_LOGIN_CANCEL_CODES = new Set(['auth/popup-closed-by-user', 'auth/cancelled-popup-request'])
 
 function normalizeUsername(value: unknown): string {
   if (typeof value !== 'string') {
@@ -134,12 +139,70 @@ function readErrorCode(error: unknown): string {
   return ''
 }
 
-function shouldFallbackToRedirect(error: unknown): boolean {
-  return REDIRECT_FALLBACK_CODES.has(readErrorCode(error))
+function shouldRecoverWithRedirect(error: unknown): boolean {
+  return REDIRECT_RECOVERY_CODES.has(readErrorCode(error))
 }
 
 function hasXProvider(user: User): boolean {
   return user.providerData.some((provider) => provider.providerId === 'twitter.com')
+}
+
+function hasLoginRedirectRecovery(): boolean {
+  if (typeof window === 'undefined') {
+    return false
+  }
+
+  try {
+    return window.sessionStorage.getItem(AUTH_REDIRECT_RECOVERY_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function setLoginRedirectRecovery(): void {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  try {
+    window.sessionStorage.setItem(AUTH_REDIRECT_RECOVERY_KEY, '1')
+  } catch {
+    // Ignore storage failures; fallback still works.
+  }
+}
+
+function clearLoginRedirectRecovery(): void {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  try {
+    window.sessionStorage.removeItem(AUTH_REDIRECT_RECOVERY_KEY)
+  } catch {
+    // Ignore storage failures; this key is best-effort only.
+  }
+}
+
+function readLoginErrorMessage(error: unknown, fallback: string): string {
+  const code = readErrorCode(error)
+
+  if (SOFT_LOGIN_CANCEL_CODES.has(code)) {
+    return "Couldn't complete popup sign-in. Please try again."
+  }
+
+  if (code === 'auth/unauthorized-domain') {
+    return 'This domain is not authorized for X login.'
+  }
+
+  if (code === 'auth/web-storage-unsupported') {
+    return 'This browser does not support required storage for login.'
+  }
+
+  if (code === 'auth/internal-error') {
+    return 'Could not complete X login. Please try again.'
+  }
+
+  return readErrorMessage(error, fallback)
 }
 
 function App() {
@@ -241,10 +304,13 @@ function App() {
 
     const initRedirectAuth = async () => {
       try {
-        await getRedirectResult(auth)
+        const redirectResult = await getRedirectResult(auth)
+        if (redirectResult?.user) {
+          clearLoginRedirectRecovery()
+        }
       } catch (err: unknown) {
         if (active) {
-          setError(readErrorMessage(err, 'X login failed. Please try again.'))
+          setError(readLoginErrorMessage(err, 'X login failed. Please try again.'))
         }
       }
     }
@@ -276,6 +342,8 @@ function App() {
         }
 
         setUser(nextUser)
+        setLoginPending(false)
+        clearLoginRedirectRecovery()
         setProfileSyncing(true)
 
         const dashboardData = await refreshDashboard()
@@ -314,6 +382,7 @@ function App() {
       return
     }
 
+    clearLoginRedirectRecovery()
     setError('')
     setNotice('')
     setLoginPending(true)
@@ -321,13 +390,35 @@ function App() {
 
     try {
       await signInWithPopup(auth, provider)
+      clearLoginRedirectRecovery()
     } catch (err: unknown) {
-      if (shouldFallbackToRedirect(err)) {
-        await signInWithRedirect(auth, provider)
+      const code = readErrorCode(err)
+
+      if (auth.currentUser) {
+        clearLoginRedirectRecovery()
         return
       }
 
-      setError(readErrorMessage(err, 'Could not log in with X.'))
+      if (shouldRecoverWithRedirect(err)) {
+        if (!hasLoginRedirectRecovery()) {
+          setLoginRedirectRecovery()
+          setNotice('Completing sign-in...')
+          await signInWithRedirect(auth, provider)
+          return
+        }
+
+        if (SOFT_LOGIN_CANCEL_CODES.has(code)) {
+          setNotice("Couldn't complete popup sign-in. Please try again.")
+          return
+        }
+      }
+
+      if (SOFT_LOGIN_CANCEL_CODES.has(code)) {
+        setNotice("Couldn't complete popup sign-in. Please try again.")
+        return
+      }
+
+      setError(readLoginErrorMessage(err, 'Could not log in with X.'))
     } finally {
       setLoginPending(false)
     }
@@ -339,6 +430,7 @@ function App() {
     setAddPending(false)
     try {
       await signOut(auth)
+      clearLoginRedirectRecovery()
       setDashboard(null)
       setNotice('Signed out.')
     } catch (err: unknown) {
@@ -580,11 +672,6 @@ function App() {
           </div>
         </section>
 
-        <footer className="app-footer-links">
-          <Link to="/privacy">Privacy Policy</Link>
-          <Link to="/terms">Terms & Acceptable Use</Link>
-        </footer>
-
         {error && <p className="alert alert-error">{error}</p>}
         {notice && <p className="alert alert-success">{notice}</p>}
       </main>
@@ -624,11 +711,6 @@ function App() {
             </button>
           </article>
         </section>
-
-        <footer className="app-footer-links">
-          <Link to="/privacy">Privacy Policy</Link>
-          <Link to="/terms">Terms & Acceptable Use</Link>
-        </footer>
 
         {error && <p className="alert alert-error">{error}</p>}
         {notice && <p className="alert alert-success">{notice}</p>}

@@ -1,5 +1,4 @@
 import type { FormEvent } from 'react'
-import { Link } from 'react-router-dom'
 
 export type SettingsReportReason = 'harassment' | 'impersonation' | 'spam' | 'other'
 
@@ -59,9 +58,6 @@ function SettingsPage({
       <article className="card settings-intro-card">
         <h2>Settings</h2>
         <p className="muted">Manage safety tools and account controls. These actions are optional and usually rarely used.</p>
-        <p className="muted settings-inline-link">
-          <Link to="/">Back to dashboard</Link>
-        </p>
       </article>
 
       <article className="card">
