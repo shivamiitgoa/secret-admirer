@@ -194,6 +194,45 @@ input:focus {
   box-shadow: 0 0 0 3px rgba(15, 111, 255, 0.14);
 }
 
+.username-input {
+  margin-top: 0.35rem;
+  display: flex;
+  align-items: center;
+  border: 1px solid #c9d7ea;
+  border-radius: 12px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.username-input:focus-within {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(15, 111, 255, 0.14);
+}
+
+.username-prefix {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-width: 2.65rem;
+  padding: 0 0.65rem;
+  background: #f3f7ff;
+  border-right: 1px solid #d8e5f7;
+  color: #4c6490;
+  font-weight: 800;
+}
+
+.username-input-field {
+  margin-top: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.username-input-field:focus {
+  box-shadow: none;
+}
+
 button {
   border: 0;
   border-radius: 12px;
@@ -231,6 +270,12 @@ button:disabled {
   color: var(--text-muted);
   font-size: 0.88rem;
   line-height: 1.5;
+}
+
+.field-hint {
+  margin: 0.45rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
 }
 
 .alert {

@@ -451,13 +451,18 @@ function App() {
           <p className="muted">Use their X username. We'll reveal names only if both sides match.</p>
           <label>
             X username
-            <input
-              value={toUsername}
-              onChange={(e) => setToUsername(e.target.value)}
-              placeholder="@username"
-              autoComplete="off"
-            />
+            <div className="username-input">
+              <span className="username-prefix">@</span>
+              <input
+                className="username-input-field"
+                value={toUsername}
+                onChange={(e) => setToUsername(normalizeUsername(e.target.value))}
+                placeholder="albertadevs"
+                autoComplete="off"
+              />
+            </div>
           </label>
+          <p className="field-hint">You can type `albertadevs` or `@albertadevs`.</p>
           <button type="submit" className="primary" disabled={!canAdd}>
             Add admirer
           </button>
