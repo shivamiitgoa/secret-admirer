@@ -99,8 +99,6 @@ const REDIRECT_RECOVERY_CODES = new Set([
   'auth/popup-blocked',
   'auth/web-storage-unsupported',
   'auth/operation-not-supported-in-this-environment',
-  'auth/popup-closed-by-user',
-  'auth/cancelled-popup-request',
 ])
 
 const SOFT_LOGIN_CANCEL_CODES = new Set(['auth/popup-closed-by-user', 'auth/cancelled-popup-request'])
@@ -310,7 +308,11 @@ function App() {
         }
       } catch (err: unknown) {
         if (active) {
-          setError(readLoginErrorMessage(err, 'X login failed. Please try again.'))
+          if (SOFT_LOGIN_CANCEL_CODES.has(readErrorCode(err))) {
+            setNotice('Sign-in was cancelled. Continue with X when you are ready.')
+          } else {
+            setError(readLoginErrorMessage(err, 'X login failed. Please try again.'))
+          }
         }
       }
     }
@@ -406,15 +408,10 @@ function App() {
           await signInWithRedirect(auth, provider)
           return
         }
-
-        if (SOFT_LOGIN_CANCEL_CODES.has(code)) {
-          setNotice("Couldn't complete popup sign-in. Please try again.")
-          return
-        }
       }
 
       if (SOFT_LOGIN_CANCEL_CODES.has(code)) {
-        setNotice("Couldn't complete popup sign-in. Please try again.")
+        setNotice('Sign-in was cancelled. Continue with X when you are ready.')
         return
       }
 
