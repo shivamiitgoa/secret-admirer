@@ -30,16 +30,17 @@
   min-width: 0;
 }
 
-.brand-orb {
+.brand-mark {
   width: 2.35rem;
   height: 2.35rem;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--color-coral-500), var(--color-sky-500));
+  display: inline-block;
+  flex: 0 0 auto;
+}
+
+.brand-mark-img {
   box-shadow: 0 10px 24px rgba(43, 136, 245, 0.34);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
+  object-fit: cover;
 }
 
 .brand-meta {

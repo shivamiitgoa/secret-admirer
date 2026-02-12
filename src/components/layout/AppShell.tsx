@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
-import { HeartHandshake } from 'lucide-react'
+import BrandMark from '../common/BrandMark'
 
 type AppShellProps = {
   sectionLabel: string
@@ -36,9 +36,7 @@ function AppShell({
         transition={{ duration: 0.28, ease: 'easeOut' }}
       >
         <div className="app-topbar-left">
-          <span className="brand-orb" aria-hidden="true">
-            <HeartHandshake size={18} />
-          </span>
+          <BrandMark className="brand-mark brand-mark-img" decorative />
           <span className="brand-meta">
             <span className="brand-eyebrow">{sectionLabel}</span>
             <span className="brand-title">Secret Admirer</span>
