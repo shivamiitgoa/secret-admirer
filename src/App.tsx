@@ -20,6 +20,13 @@ type Dashboard = {
   outgoingCount: number
   maxOutgoing: number
   matches: { otherUid: string; otherUsername: string; createdAt?: unknown }[]
+  sentAdmirers?: {
+    toUid: string
+    toUsername: string
+    revealed: boolean
+    createdAt?: unknown | null
+    matchedAt?: unknown | null
+  }[]
 }
 
 type SyncXProfileRequest = {
@@ -136,6 +143,7 @@ function App() {
   const [dashboard, setDashboard] = useState<Dashboard | null>(null)
   const [manualUsername, setManualUsername] = useState('')
   const [toUsername, setToUsername] = useState('')
+  const [addPending, setAddPending] = useState(false)
 
   const pendingSyncUsernameRef = useRef<string | null>(null)
   const autoSyncAttemptedRef = useRef<Set<string>>(new Set())
@@ -289,6 +297,7 @@ function App() {
   const handleSignOut = async () => {
     setError('')
     setNotice('')
+    setAddPending(false)
     try {
       await signOut(auth)
       setDashboard(null)
@@ -321,6 +330,10 @@ function App() {
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (addPending) {
+      return
+    }
+
     setError('')
     setNotice('')
     const normalizedToUsername = normalizeUsername(toUsername)
@@ -330,6 +343,7 @@ function App() {
       return
     }
 
+    setAddPending(true)
     try {
       const res = await addAdmirer({ toUsername: normalizedToUsername })
       const data = res.data
@@ -344,6 +358,8 @@ function App() {
       await refreshDashboard()
     } catch (err: unknown) {
       setError(readErrorMessage(err, 'Could not add admirer.'))
+    } finally {
+      setAddPending(false)
     }
   }
 
@@ -444,9 +460,25 @@ function App() {
           ) : (
             <p className="muted">No matches yet.</p>
           )}
+
+          <h3>Sent crushes</h3>
+          {dashboard?.sentAdmirers?.length ? (
+            <ul className="sent-crushes">
+              {dashboard.sentAdmirers.map((sent) => (
+                <li key={sent.toUid}>
+                  <span className="sent-handle">@{sent.toUsername}</span>
+                  <span className={`status-pill ${sent.revealed ? 'status-pill-match' : 'status-pill-pending'}`}>
+                    {sent.revealed ? 'Matched' : 'Pending'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="muted">No crushes added yet.</p>
+          )}
         </article>
 
-        <form className="card" onSubmit={handleAdd}>
+        <form className="card" onSubmit={handleAdd} aria-busy={addPending}>
           <h2>Add a crush</h2>
           <p className="muted">Use their X username. We'll reveal names only if both sides match.</p>
           <label>
@@ -459,12 +491,16 @@ function App() {
                 onChange={(e) => setToUsername(normalizeUsername(e.target.value))}
                 placeholder="@username"
                 autoComplete="off"
+                disabled={addPending}
               />
             </div>
           </label>
           <p className="field-hint">You can type `username` or `@username`.</p>
-          <button type="submit" className="primary" disabled={!canAdd}>
-            Add admirer
+          <button type="submit" className="primary" disabled={addPending || !canAdd}>
+            <span className="button-content">
+              {addPending && <span className="spinner" aria-hidden="true" />}
+              {addPending ? 'Adding...' : 'Add admirer'}
+            </span>
           </button>
           {(dashboard?.outgoingCount ?? 0) >= (dashboard?.maxOutgoing ?? 5) && (
             <p className="muted">You reached your admirer limit.</p>

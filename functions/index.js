@@ -252,11 +252,31 @@ exports.getDashboard = onCall({ invoker: 'public' }, async (request) => {
   const userRef = db.collection('users').doc(uid)
   const statsRef = db.collection('stats').doc(uid)
 
-  const [userSnap, statsSnap, matchesSnap] = await Promise.all([
+  const [userSnap, statsSnap, matchesSnap, sentAdmirersSnap] = await Promise.all([
     userRef.get(),
     statsRef.get(),
     db.collection('users').doc(uid).collection('matches').orderBy('createdAt', 'desc').limit(20).get(),
+    db.collection('admirations').where('fromUid', '==', uid).get(),
   ])
+
+  const sentAdmirers = sentAdmirersSnap.docs
+    .map((doc) => {
+      const data = doc.data()
+      return {
+        toUid: String(data.toUid || ''),
+        toUsername: String(data.toUsername || ''),
+        revealed: Boolean(data.revealed),
+        createdAt: data.createdAt || null,
+        matchedAt: data.matchedAt || null,
+      }
+    })
+    .filter((item) => item.toUid && item.toUsername)
+    .sort((a, b) => {
+      const aTime = typeof a.createdAt?.toMillis === 'function' ? a.createdAt.toMillis() : 0
+      const bTime = typeof b.createdAt?.toMillis === 'function' ? b.createdAt.toMillis() : 0
+      return bTime - aTime
+    })
+    .slice(0, MAX_OUTGOING)
 
   return {
     username: userSnap.exists ? userSnap.data().username : null,
@@ -264,5 +284,6 @@ exports.getDashboard = onCall({ invoker: 'public' }, async (request) => {
     outgoingCount: statsSnap.exists ? Number(statsSnap.data().outgoingCount || 0) : 0,
     maxOutgoing: MAX_OUTGOING,
     matches: matchesSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+    sentAdmirers,
   }
 })

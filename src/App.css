@@ -170,6 +170,57 @@ body {
   font-size: 0.88rem;
 }
 
+.sent-crushes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.sent-crushes li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  border-radius: 12px;
+  border: 1px solid var(--card-border);
+  background: rgba(255, 255, 255, 0.9);
+  padding: 0.46rem 0.62rem;
+}
+
+.sent-handle {
+  color: #1b446f;
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 0.18rem 0.58rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.status-pill-pending {
+  background: rgba(74, 96, 125, 0.14);
+  color: #314868;
+}
+
+.status-pill-match {
+  background: rgba(15, 122, 68, 0.14);
+  color: #0d6d3c;
+}
+
 label {
   margin-top: 0.8rem;
   display: block;
@@ -262,6 +313,28 @@ button:disabled {
   color: #fff;
   background: linear-gradient(135deg, var(--brand), var(--brand-strong));
   box-shadow: 0 10px 20px rgba(15, 111, 255, 0.27);
+}
+
+.button-content {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+}
+
+.spinner {
+  width: 0.88rem;
+  height: 0.88rem;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.42);
+  border-top-color: #fff;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .ghost {
