@@ -457,12 +457,12 @@ function App() {
                 className="username-input-field"
                 value={toUsername}
                 onChange={(e) => setToUsername(normalizeUsername(e.target.value))}
-                placeholder="albertadevs"
+                placeholder="@username"
                 autoComplete="off"
               />
             </div>
           </label>
-          <p className="field-hint">You can type `albertadevs` or `@albertadevs`.</p>
+          <p className="field-hint">You can type `username` or `@username`.</p>
           <button type="submit" className="primary" disabled={!canAdd}>
             Add admirer
           </button>
