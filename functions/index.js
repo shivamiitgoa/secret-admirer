@@ -9,6 +9,12 @@ setGlobalOptions({ region: 'asia-south1', maxInstances: 10 })
 const MAX_OUTGOING = 5
 const X_USERNAME_REGEX = /^[a-z0-9_]{1,15}$/
 const CALLABLE_OPTIONS = { invoker: 'public', enforceAppCheck: true }
+const RATE_LIMITS = {
+  syncXProfile: { limit: 20, windowMs: 60_000 },
+  claimUsername: { limit: 20, windowMs: 60_000 },
+  addAdmirer: { limit: 20, windowMs: 60_000 },
+  getDashboard: { limit: 120, windowMs: 60_000 },
+}
 
 function normalizeUsername(value) {
   return String(value || '')
@@ -47,6 +53,53 @@ function extractXUserId(authToken) {
 
 function extractXUsernameFromToken(authToken) {
   return normalizeUsername(authToken?.screen_name || authToken?.screenName)
+}
+
+async function enforceUserRateLimit({ uid, action }) {
+  const config = RATE_LIMITS[action]
+  if (!config) {
+    return
+  }
+
+  const now = Date.now()
+  const limitRef = db.collection('rateLimits').doc(`${action}_${uid}`)
+
+  await db.runTransaction(async (tx) => {
+    const limitSnap = await tx.get(limitRef)
+    let windowStartMs = now
+    let count = 0
+
+    if (limitSnap.exists) {
+      const data = limitSnap.data()
+      const prevWindowStartMs = Number(data.windowStartMs || 0)
+      const prevCount = Number(data.count || 0)
+      const withinWindow =
+        Number.isFinite(prevWindowStartMs) &&
+        Number.isFinite(prevCount) &&
+        now - prevWindowStartMs < config.windowMs
+
+      if (withinWindow) {
+        windowStartMs = prevWindowStartMs
+        count = prevCount
+      }
+    }
+
+    if (count >= config.limit) {
+      throw new HttpsError('resource-exhausted', 'Too many requests. Please wait a minute and try again.')
+    }
+
+    tx.set(
+      limitRef,
+      {
+        uid,
+        action,
+        windowStartMs,
+        count: count + 1,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    )
+  })
 }
 
 async function resolveVerifiedUsername({ uid, request }) {
@@ -169,6 +222,7 @@ async function upsertXIdentity({ uid, username, authToken }) {
 
 exports.syncXProfile = onCall(CALLABLE_OPTIONS, async (request) => {
   const uid = assertXAuth(request)
+  await enforceUserRateLimit({ uid, action: 'syncXProfile' })
   const username = await resolveVerifiedUsername({ uid, request })
 
   assertValidXUsername(username)
@@ -179,6 +233,7 @@ exports.syncXProfile = onCall(CALLABLE_OPTIONS, async (request) => {
 
 exports.claimUsername = onCall(CALLABLE_OPTIONS, async (request) => {
   const uid = assertXAuth(request)
+  await enforceUserRateLimit({ uid, action: 'claimUsername' })
   const username = await resolveVerifiedUsername({ uid, request })
 
   assertValidXUsername(username)
@@ -189,6 +244,7 @@ exports.claimUsername = onCall(CALLABLE_OPTIONS, async (request) => {
 
 exports.addAdmirer = onCall(CALLABLE_OPTIONS, async (request) => {
   const fromUid = assertXAuth(request)
+  await enforceUserRateLimit({ uid: fromUid, action: 'addAdmirer' })
   const toUsername = normalizeUsername(request.data?.toUsername)
   const message = String(request.data?.message || '').trim().slice(0, 300)
 
@@ -212,7 +268,7 @@ exports.addAdmirer = onCall(CALLABLE_OPTIONS, async (request) => {
     const toIndexRef = db.collection('usernameIndex').doc(toUsername)
     const toIndexSnap = await tx.get(toIndexRef)
     if (!toIndexSnap.exists) {
-      throw new HttpsError('not-found', 'That username has not joined yet.')
+      throw new HttpsError('failed-precondition', 'Could not add admirer with that username.')
     }
 
     const toUid = toIndexSnap.data().uid
@@ -286,6 +342,7 @@ exports.addAdmirer = onCall(CALLABLE_OPTIONS, async (request) => {
 
 exports.getDashboard = onCall(CALLABLE_OPTIONS, async (request) => {
   const uid = assertXAuth(request)
+  await enforceUserRateLimit({ uid, action: 'getDashboard' })
   const userRef = db.collection('users').doc(uid)
   const statsRef = db.collection('stats').doc(uid)
 
