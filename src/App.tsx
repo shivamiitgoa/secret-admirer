@@ -28,7 +28,8 @@ type Match = {
 }
 
 type SentAdmirer = {
-  toUid: string
+  id: string
+  toUid?: string | null
   toUsername: string
   revealed: boolean
   createdAt?: unknown | null
@@ -243,7 +244,7 @@ function App() {
 
   const [blockUsername, setBlockUsername] = useState('')
   const [blockPending, setBlockPending] = useState(false)
-  const [unblockPendingUid, setUnblockPendingUid] = useState('')
+  const [unblockPendingId, setUnblockPendingId] = useState('')
 
   const [deleteConfirmation, setDeleteConfirmation] = useState('')
   const [deletePending, setDeletePending] = useState(false)
@@ -602,14 +603,14 @@ function App() {
     }
   }
 
-  const handleUnblock = async (targetUsername: string, targetUid: string) => {
-    if (unblockPendingUid) {
+  const handleUnblock = async (targetUsername: string, blockId: string) => {
+    if (unblockPendingId) {
       return
     }
 
     setError('')
     setNotice('')
-    setUnblockPendingUid(targetUid)
+    setUnblockPendingId(blockId)
 
     try {
       await unblockUser({ targetUsername })
@@ -618,7 +619,7 @@ function App() {
     } catch (err: unknown) {
       setError(readErrorMessage(err, 'Could not unblock this user.'))
     } finally {
-      setUnblockPendingUid('')
+      setUnblockPendingId('')
     }
   }
 
@@ -709,7 +710,7 @@ function App() {
           sectionLabel="Welcome"
           eyebrow="Mutual Reveal"
           title="Private signals without public pressure"
-          subtitle="A trust-first experience for mutual intent. Names reveal only when both people choose each other."
+          subtitle="A trust-first experience where no one can tell whether you have an account, and names reveal only when both people choose each other."
           footer={sharedFooter}
           heroAside={
             <>
@@ -719,7 +720,7 @@ function App() {
               </div>
               <div className="hero-badge">
                 <h3>Private by default</h3>
-                <p>No reveal unless both users send a signal.</p>
+                <p>Your crush never knows unless feelings are mutual.</p>
               </div>
             </>
           }
@@ -783,7 +784,7 @@ function App() {
         subtitle={
           isSettingsPage
             ? 'Manage reporting, blocking, and account controls without mixing them into your daily dashboard.'
-            : 'Add X usernames privately. Names unlock for both people only when admiration is mutual.'
+            : 'Add X usernames privately. Account presence stays private, and names unlock only when admiration is mutual.'
         }
         username={dashboardView.username}
         actions={
@@ -837,7 +838,7 @@ function App() {
             onBlockSubmit={handleBlock}
             onBlockUsernameChange={(value) => setBlockUsername(normalizeUsername(value))}
             blockedUsers={dashboardView.blockedUsers}
-            unblockPendingUid={unblockPendingUid}
+            unblockPendingId={unblockPendingId}
             onUnblock={handleUnblock}
             deleteConfirmation={deleteConfirmation}
             deletePending={deletePending}

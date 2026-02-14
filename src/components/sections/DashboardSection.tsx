@@ -8,7 +8,8 @@ type DashboardMatch = {
 }
 
 type DashboardSentAdmirer = {
-  toUid: string
+  id: string
+  toUid?: string | null
   toUsername: string
   revealed: boolean
 }
@@ -61,7 +62,7 @@ function DashboardSection({
         >
           <h2 className="section-title">Send a private signal</h2>
           <p className="section-subtitle">
-            Enter an X handle. Names reveal only when both people choose each other.
+            Enter an X handle. Account presence stays private, and names reveal only when both people choose each other.
           </p>
 
           <div className="form-stack">
@@ -170,7 +171,7 @@ function DashboardSection({
           {sentAdmirers.length ? (
             <ul className="vertical-list">
               {sentAdmirers.map((sent) => (
-                <li key={sent.toUid} className="vertical-list-item">
+                <li key={sent.id} className="vertical-list-item">
                   <span className="vertical-list-handle">@{sent.toUsername}</span>
                   <span className={`status-pill ${sent.revealed ? 'status-pill-match' : 'status-pill-pending'}`}>
                     {sent.revealed ? (

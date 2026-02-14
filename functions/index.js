@@ -99,6 +99,14 @@ function buildBlockDocId(blockerUid, blockedUid) {
   return `${blockerUid}_${blockedUid}`
 }
 
+function buildUsernameBlockDocId(blockerUid, blockedUsername) {
+  return `${blockerUid}_username_${blockedUsername}`
+}
+
+function buildAdmirerDocId(fromUid, toUsername) {
+  return `${fromUid}_${toUsername}`
+}
+
 async function enforceUserRateLimit({ uid, action }) {
   const config = RATE_LIMITS[action]
   if (!config) {
@@ -399,89 +407,105 @@ exports.addAdmirer = onCall(CALLABLE_OPTIONS, async (request) => {
 
     assertAcceptedConsent(fromUserSnap.data())
 
-    const fromUsername = fromUserSnap.data().username
+    const fromUsername = normalizeUsername(fromUserSnap.data().username)
     if (fromUsername === toUsername) {
       throw new HttpsError('invalid-argument', 'You cannot add yourself.')
     }
-
-    const toIndexRef = db.collection('usernameIndex').doc(toUsername)
-    const toIndexSnap = await tx.get(toIndexRef)
-    if (!toIndexSnap.exists) {
-      throw new HttpsError('failed-precondition', 'Could not send a signal to that username.')
-    }
-
-    const toUid = toIndexSnap.data().uid
-    const blockRef = db.collection('blocks').doc(buildBlockDocId(fromUid, toUid))
-    const reverseBlockRef = db.collection('blocks').doc(buildBlockDocId(toUid, fromUid))
 
     const statsRef = db.collection('stats').doc(fromUid)
     const statsSnap = await tx.get(statsRef)
     const outgoingCount = statsSnap.exists ? Number(statsSnap.data().outgoingCount || 0) : 0
 
-    const edgeId = `${fromUid}_${toUid}`
-    const reverseEdgeId = `${toUid}_${fromUid}`
-    const edgeRef = db.collection('admirations').doc(edgeId)
-    const reverseRef = db.collection('admirations').doc(reverseEdgeId)
-    const toStatsRef = db.collection('stats').doc(toUid)
-
-    const [edgeSnap, reverseSnap, toStatsSnap, blockSnap, reverseBlockSnap] = await Promise.all([
-      tx.get(edgeRef),
-      tx.get(reverseRef),
-      tx.get(toStatsRef),
-      tx.get(blockRef),
-      tx.get(reverseBlockRef),
-    ])
-
-    if (blockSnap.exists || reverseBlockSnap.exists) {
-      throw new HttpsError('permission-denied', 'Interaction unavailable for this account.')
-    }
-
-    if (edgeSnap.exists) {
-      throw new HttpsError('already-exists', 'You already added this person.')
-    }
-
     if (outgoingCount >= MAX_OUTGOING) {
       throw new HttpsError('resource-exhausted', `You can send up to ${MAX_OUTGOING} active signals.`)
     }
 
-    const incomingCount = toStatsSnap.exists ? Number(toStatsSnap.data().incomingCount || 0) : 0
+    const toIndexRef = db.collection('usernameIndex').doc(toUsername)
+    const toIndexSnap = await tx.get(toIndexRef)
+    const resolvedToUid = toIndexSnap.exists && toIndexSnap.data().uid ? String(toIndexSnap.data().uid) : ''
+
+    const edgeRef = db.collection('admirations').doc(buildAdmirerDocId(fromUid, toUsername))
+    const edgeSnap = await tx.get(edgeRef)
+    const legacyEdgeRef = resolvedToUid ? db.collection('admirations').doc(`${fromUid}_${resolvedToUid}`) : null
+    const legacyEdgeSnap = legacyEdgeRef ? await tx.get(legacyEdgeRef) : null
+
+    if (edgeSnap.exists || legacyEdgeSnap?.exists) {
+      throw new HttpsError('already-exists', 'You already added this person.')
+    }
+
+    let allowResolvedInteraction = Boolean(resolvedToUid)
+    if (resolvedToUid) {
+      const [directBlockSnap, reverseBlockSnap, directUsernameBlockSnap, reverseUsernameBlockSnap] = await Promise.all([
+        tx.get(db.collection('blocks').doc(buildBlockDocId(fromUid, resolvedToUid))),
+        tx.get(db.collection('blocks').doc(buildBlockDocId(resolvedToUid, fromUid))),
+        tx.get(db.collection('blocks').doc(buildUsernameBlockDocId(fromUid, toUsername))),
+        tx.get(db.collection('blocks').doc(buildUsernameBlockDocId(resolvedToUid, fromUsername))),
+      ])
+
+      if (
+        directBlockSnap.exists ||
+        reverseBlockSnap.exists ||
+        directUsernameBlockSnap.exists ||
+        reverseUsernameBlockSnap.exists
+      ) {
+        allowResolvedInteraction = false
+      }
+    }
+
+    const targetUid = allowResolvedInteraction ? resolvedToUid : null
+    const toStatsRef = targetUid ? db.collection('stats').doc(targetUid) : null
+    const toStatsSnap = toStatsRef ? await tx.get(toStatsRef) : null
+    const reverseRef = targetUid ? db.collection('admirations').doc(buildAdmirerDocId(targetUid, fromUsername)) : null
+    const reverseLegacyRef = targetUid ? db.collection('admirations').doc(`${targetUid}_${fromUid}`) : null
+    const reverseSnap = reverseRef ? await tx.get(reverseRef) : null
+    const reverseLegacySnap = reverseLegacyRef ? await tx.get(reverseLegacyRef) : null
+
     const fromMatchCount = statsSnap.exists ? Number(statsSnap.data().matchCount || 0) : 0
-    const toMatchCount = toStatsSnap.exists ? Number(toStatsSnap.data().matchCount || 0) : 0
+    const toMatchCount = toStatsSnap?.exists ? Number(toStatsSnap.data().matchCount || 0) : 0
 
     tx.set(edgeRef, {
       fromUid,
-      toUid,
+      toUid: targetUid,
       fromUsername,
       toUsername,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       revealed: false,
+      matchedAt: null,
+      targetResolved: Boolean(targetUid),
     })
 
     tx.set(statsRef, { outgoingCount: outgoingCount + 1 }, { merge: true })
 
-    tx.set(toStatsRef, { incomingCount: incomingCount + 1 }, { merge: true })
-
     let match = false
-    if (reverseSnap.exists) {
-      match = true
-      tx.set(edgeRef, { revealed: true, matchedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true })
-      tx.set(reverseRef, { revealed: true, matchedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true })
+    if (targetUid && toStatsRef && toStatsSnap) {
+      const incomingCount = Number(toStatsSnap.data().incomingCount || 0)
+      tx.set(toStatsRef, { incomingCount: incomingCount + 1 }, { merge: true })
 
-      const fromMatchRef = db.collection('users').doc(fromUid).collection('matches').doc(toUid)
-      const toMatchRef = db.collection('users').doc(toUid).collection('matches').doc(fromUid)
-      tx.set(fromMatchRef, {
-        otherUid: toUid,
-        otherUsername: toUsername,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      })
-      tx.set(toMatchRef, {
-        otherUid: fromUid,
-        otherUsername: fromUsername,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      })
+      const reverseRevealRef =
+        reverseSnap?.exists && reverseRef ? reverseRef : reverseLegacySnap?.exists && reverseLegacyRef ? reverseLegacyRef : null
 
-      tx.set(statsRef, { matchCount: fromMatchCount + 1 }, { merge: true })
-      tx.set(toStatsRef, { matchCount: toMatchCount + 1 }, { merge: true })
+      if (reverseRevealRef) {
+        match = true
+        const matchedAt = admin.firestore.FieldValue.serverTimestamp()
+        tx.set(edgeRef, { revealed: true, matchedAt }, { merge: true })
+        tx.set(reverseRevealRef, { revealed: true, matchedAt }, { merge: true })
+
+        const fromMatchRef = db.collection('users').doc(fromUid).collection('matches').doc(targetUid)
+        const toMatchRef = db.collection('users').doc(targetUid).collection('matches').doc(fromUid)
+        tx.set(fromMatchRef, {
+          otherUid: targetUid,
+          otherUsername: toUsername,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        })
+        tx.set(toMatchRef, {
+          otherUid: fromUid,
+          otherUsername: fromUsername,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        })
+
+        tx.set(statsRef, { matchCount: fromMatchCount + 1 }, { merge: true })
+        tx.set(toStatsRef, { matchCount: toMatchCount + 1 }, { merge: true })
+      }
     }
 
     return { ok: true, match, toUsername }
@@ -514,15 +538,14 @@ exports.reportUser = onCall(CALLABLE_OPTIONS, async (request) => {
   }
 
   const targetIndexSnap = await db.collection('usernameIndex').doc(targetUsername).get()
-  if (!targetIndexSnap.exists || !targetIndexSnap.data().uid) {
-    throw new HttpsError('failed-precondition', 'Could not find that user.')
-  }
+  const reportedUid = targetIndexSnap.exists && targetIndexSnap.data().uid ? String(targetIndexSnap.data().uid) : null
 
   const reportRef = db.collection('reports').doc()
   await reportRef.set({
     reporterUid: uid,
     reporterUsername,
-    reportedUid: String(targetIndexSnap.data().uid),
+    reportedUid,
+    targetResolved: Boolean(reportedUid),
     reportedUsername: targetUsername,
     reason,
     details,
@@ -555,13 +578,19 @@ exports.blockUser = onCall(CALLABLE_OPTIONS, async (request) => {
   }
 
   const targetIndexSnap = await db.collection('usernameIndex').doc(targetUsername).get()
-  if (!targetIndexSnap.exists || !targetIndexSnap.data().uid) {
-    throw new HttpsError('failed-precondition', 'Could not find that user.')
-  }
-
-  const blockedUid = String(targetIndexSnap.data().uid)
-  const blockRef = db.collection('blocks').doc(buildBlockDocId(blockerUid, blockedUid))
-  const existingBlockSnap = await blockRef.get()
+  const blockedUid = targetIndexSnap.exists && targetIndexSnap.data().uid ? String(targetIndexSnap.data().uid) : null
+  const blockRef = db
+    .collection('blocks')
+    .doc(blockedUid ? buildBlockDocId(blockerUid, blockedUid) : buildUsernameBlockDocId(blockerUid, targetUsername))
+  const usernameBlockRef = db.collection('blocks').doc(buildUsernameBlockDocId(blockerUid, targetUsername))
+  const [existingBlockSnap, existingUsernameBlockSnap] = await Promise.all([
+    blockRef.get(),
+    blockedUid && usernameBlockRef.path !== blockRef.path ? usernameBlockRef.get() : Promise.resolve(null),
+  ])
+  const existingCreatedAt =
+    (existingBlockSnap.exists && existingBlockSnap.data().createdAt) ||
+    (existingUsernameBlockSnap?.exists && existingUsernameBlockSnap.data().createdAt) ||
+    null
 
   await blockRef.set(
     {
@@ -569,15 +598,17 @@ exports.blockUser = onCall(CALLABLE_OPTIONS, async (request) => {
       blockedUid,
       blockerUsername,
       blockedUsername: targetUsername,
-      createdAt: existingBlockSnap.exists
-        ? existingBlockSnap.data().createdAt || admin.firestore.FieldValue.serverTimestamp()
-        : admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: existingCreatedAt || admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     },
     { merge: true }
   )
 
-  return { ok: true, blockedUid, blockedUsername: targetUsername }
+  if (blockedUid && usernameBlockRef.path !== blockRef.path && existingUsernameBlockSnap?.exists) {
+    await usernameBlockRef.delete()
+  }
+
+  return { ok: true, blockedUid: '', blockedUsername: targetUsername }
 })
 
 exports.unblockUser = onCall(CALLABLE_OPTIONS, async (request) => {
@@ -595,19 +626,23 @@ exports.unblockUser = onCall(CALLABLE_OPTIONS, async (request) => {
   assertAcceptedConsent(blockerSnap.data())
 
   const targetIndexSnap = await db.collection('usernameIndex').doc(targetUsername).get()
-  if (targetIndexSnap.exists && targetIndexSnap.data().uid) {
-    const blockedUid = String(targetIndexSnap.data().uid)
-    const blockRef = db.collection('blocks').doc(buildBlockDocId(blockerUid, blockedUid))
-    await blockRef.delete()
-    return { ok: true }
-  }
-
+  const blockedUid = targetIndexSnap.exists && targetIndexSnap.data().uid ? String(targetIndexSnap.data().uid) : ''
   const existingBlocksSnap = await db.collection('blocks').where('blockerUid', '==', blockerUid).get()
-  const staleRefs = existingBlocksSnap.docs
-    .filter((doc) => normalizeUsername(doc.data().blockedUsername) === targetUsername)
+  const refsToDelete = existingBlocksSnap.docs
+    .filter((doc) => {
+      const data = doc.data()
+      const blockedUsernameValue = normalizeUsername(data.blockedUsername)
+      const blockedUidValue = data.blockedUid ? String(data.blockedUid) : ''
+      return blockedUsernameValue === targetUsername || (blockedUid && blockedUidValue === blockedUid)
+    })
     .map((doc) => doc.ref)
 
-  await deleteDocumentRefsInChunks(staleRefs)
+  refsToDelete.push(db.collection('blocks').doc(buildUsernameBlockDocId(blockerUid, targetUsername)))
+  if (blockedUid) {
+    refsToDelete.push(db.collection('blocks').doc(buildBlockDocId(blockerUid, blockedUid)))
+  }
+
+  await deleteDocumentRefsInChunks(refsToDelete)
 
   return { ok: true }
 })
@@ -751,26 +786,42 @@ exports.getDashboard = onCall(CALLABLE_OPTIONS, async (request) => {
   ])
 
   const blockedInEitherDirection = new Set()
+  const blockedUsernames = new Set()
 
-  const blockedUsers = blockedByUserSnap.docs
-    .map((doc) => {
-      const data = doc.data()
-      const blockedUid = String(data.blockedUid || '')
-      if (blockedUid) {
-        blockedInEitherDirection.add(blockedUid)
-      }
-      return {
-        uid: blockedUid,
-        username: String(data.blockedUsername || ''),
-        createdAt: data.createdAt || null,
-      }
+  const blockedUsers = []
+  const seenBlockedUsernames = new Set()
+  for (const doc of blockedByUserSnap.docs) {
+    const data = doc.data()
+    const blockedUid = data.blockedUid ? String(data.blockedUid) : null
+    const blockedUsername = normalizeUsername(data.blockedUsername)
+
+    if (blockedUid) {
+      blockedInEitherDirection.add(blockedUid)
+    }
+    if (blockedUsername) {
+      blockedUsernames.add(blockedUsername)
+    }
+    if (!blockedUsername || seenBlockedUsernames.has(blockedUsername)) {
+      continue
+    }
+
+    seenBlockedUsernames.add(blockedUsername)
+    blockedUsers.push({
+      id: doc.id,
+      uid: blockedUid,
+      username: blockedUsername,
+      createdAt: data.createdAt || null,
     })
-    .filter((entry) => entry.uid && entry.username)
+  }
 
   for (const doc of blockedIncomingSnap.docs) {
     const blockerUid = String(doc.data().blockerUid || '')
+    const blockerUsername = normalizeUsername(doc.data().blockerUsername)
     if (blockerUid) {
       blockedInEitherDirection.add(blockerUid)
+    }
+    if (blockerUsername) {
+      blockedUsernames.add(blockerUsername)
     }
   }
 
@@ -778,14 +829,20 @@ exports.getDashboard = onCall(CALLABLE_OPTIONS, async (request) => {
     .map((doc) => {
       const data = doc.data()
       return {
-        toUid: String(data.toUid || ''),
-        toUsername: String(data.toUsername || ''),
+        id: doc.id,
+        toUid: data.toUid ? String(data.toUid) : null,
+        toUsername: normalizeUsername(data.toUsername),
         revealed: Boolean(data.revealed),
         createdAt: data.createdAt || null,
         matchedAt: data.matchedAt || null,
       }
     })
-    .filter((item) => item.toUid && item.toUsername && !blockedInEitherDirection.has(item.toUid))
+    .filter(
+      (item) =>
+        item.toUsername &&
+        !blockedUsernames.has(item.toUsername) &&
+        (!item.toUid || !blockedInEitherDirection.has(item.toUid))
+    )
     .sort((a, b) => {
       const aTime = typeof a.createdAt?.toMillis === 'function' ? a.createdAt.toMillis() : 0
       const bTime = typeof b.createdAt?.toMillis === 'function' ? b.createdAt.toMillis() : 0

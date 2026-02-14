@@ -5,7 +5,8 @@ import { AlertTriangle, Ban, Flag, ShieldAlert, ShieldCheck, UserRoundX } from '
 export type SettingsReportReason = 'harassment' | 'impersonation' | 'spam' | 'other'
 
 export type SettingsBlockedUser = {
-  uid: string
+  id: string
+  uid: string | null
   username: string
   createdAt?: unknown | null
 }
@@ -25,8 +26,8 @@ type SettingsPageProps = {
   onBlockSubmit: (e: FormEvent) => void
   onBlockUsernameChange: (value: string) => void
   blockedUsers: SettingsBlockedUser[]
-  unblockPendingUid: string
-  onUnblock: (username: string, uid: string) => void
+  unblockPendingId: string
+  onUnblock: (username: string, blockId: string) => void
   deleteConfirmation: string
   deletePending: boolean
   onDeleteSubmit: (e: FormEvent) => void
@@ -48,7 +49,7 @@ function SettingsPage({
   onBlockSubmit,
   onBlockUsernameChange,
   blockedUsers,
-  unblockPendingUid,
+  unblockPendingId,
   onUnblock,
   deleteConfirmation,
   deletePending,
@@ -161,15 +162,15 @@ function SettingsPage({
           {blockedUsers.length ? (
             <ul className="vertical-list list-actions">
               {blockedUsers.map((blocked) => (
-                <li key={blocked.uid} className="vertical-list-item">
+                <li key={blocked.id} className="vertical-list-item">
                   <span className="vertical-list-handle">@{blocked.username}</span>
                   <button
                     type="button"
                     className="btn btn-secondary"
-                    onClick={() => onUnblock(blocked.username, blocked.uid)}
-                    disabled={Boolean(unblockPendingUid) || !canUseSafetyTools}
+                    onClick={() => onUnblock(blocked.username, blocked.id)}
+                    disabled={Boolean(unblockPendingId) || !canUseSafetyTools}
                   >
-                    {unblockPendingUid === blocked.uid ? (
+                    {unblockPendingId === blocked.id ? (
                       <>
                         <ShieldAlert size={15} aria-hidden="true" /> Unblocking...
                       </>
