@@ -1,5 +1,20 @@
 {
   "projects": {
     "default": "secret-admirer-app"
+  },
+  "targets": {
+    "secret-admirer-app": {
+      "hosting": {
+        "app": [
+          "mutualwink-main-2026"
+        ],
+        "www": [
+          "mutualwink-web-2026"
+        ],
+        "legacy": [
+          "secret-admirer-app"
+        ]
+      }
+    }
   }
 }

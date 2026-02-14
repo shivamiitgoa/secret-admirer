@@ -1,54 +1,55 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@500;600;700;800&display=swap');
 
 :root {
-  --font-display: 'Space Grotesk', 'Avenir Next', 'Segoe UI', sans-serif;
-  --font-body: 'Plus Jakarta Sans', 'Avenir Next', 'Segoe UI', sans-serif;
+  --font-display: 'Sora', 'Avenir Next', 'Segoe UI', sans-serif;
+  --font-body: 'Manrope', 'Avenir Next', 'Segoe UI', sans-serif;
 
-  --color-ink-950: #0b1326;
-  --color-ink-900: #111c37;
-  --color-ink-700: #314063;
-  --color-ink-500: #516186;
-  --color-ivory-050: #fff8ef;
-  --color-ivory-100: #fffdf9;
-  --color-ivory-200: #fff2df;
-  --color-sky-400: #58a4f5;
-  --color-sky-500: #2b88f5;
-  --color-sky-600: #1f6fd4;
-  --color-coral-400: #f98f73;
-  --color-coral-500: #f7744d;
-  --color-mint-400: #27b289;
-  --color-mint-100: #d7f3ea;
-  --color-danger-400: #e85a5a;
-  --color-danger-100: #ffdede;
+  --color-night-980: #090f1a;
+  --color-night-950: #0c1524;
+  --color-night-900: #121f34;
+  --color-night-820: #203453;
+  --color-night-700: #35527b;
 
-  --glass-bg-strong: rgba(255, 255, 255, 0.86);
-  --glass-bg-soft: rgba(255, 255, 255, 0.72);
-  --glass-border: rgba(17, 28, 55, 0.12);
+  --color-cloud-050: #fff9f2;
+  --color-cloud-100: #fff3e6;
+  --color-cloud-150: #ffe9d2;
 
-  --radius-xs: 10px;
-  --radius-sm: 14px;
-  --radius-md: 20px;
-  --radius-lg: 28px;
+  --color-amber-500: #ea580c;
+  --color-amber-420: #ff7a1f;
+  --color-mint-420: #0d9488;
+  --color-mint-120: #c8f1ea;
+
+  --color-danger-420: #dd4b39;
+  --color-danger-120: #ffe0db;
+
+  --glass-bg-strong: rgba(255, 255, 255, 0.88);
+  --glass-bg-soft: rgba(255, 255, 255, 0.74);
+  --glass-border: rgba(13, 31, 56, 0.16);
+
+  --radius-xs: 12px;
+  --radius-sm: 16px;
+  --radius-md: 22px;
+  --radius-lg: 30px;
   --radius-pill: 999px;
 
   --space-1: 0.4rem;
-  --space-2: 0.65rem;
-  --space-3: 0.9rem;
-  --space-4: 1.2rem;
-  --space-5: 1.6rem;
-  --space-6: 2rem;
-  --space-7: 2.8rem;
+  --space-2: 0.68rem;
+  --space-3: 0.94rem;
+  --space-4: 1.24rem;
+  --space-5: 1.66rem;
+  --space-6: 2.08rem;
+  --space-7: 2.96rem;
 
-  --shadow-soft: 0 12px 28px rgba(13, 25, 49, 0.1);
-  --shadow-strong: 0 24px 60px rgba(13, 25, 49, 0.18);
-  --shadow-focus: 0 0 0 3px rgba(43, 136, 245, 0.3);
+  --shadow-soft: 0 16px 36px rgba(10, 19, 34, 0.16);
+  --shadow-strong: 0 28px 72px rgba(9, 15, 26, 0.26);
+  --shadow-focus: 0 0 0 3px rgba(234, 88, 12, 0.34);
 
-  --motion-fast: 140ms;
-  --motion-normal: 260ms;
+  --motion-fast: 150ms;
+  --motion-normal: 280ms;
   --motion-slow: 520ms;
 
   font-family: var(--font-body);
-  color: var(--color-ink-900);
+  color: var(--color-night-900);
 }
 
 @media (prefers-reduced-motion: reduce) {

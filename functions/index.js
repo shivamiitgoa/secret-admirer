@@ -9,9 +9,9 @@ setGlobalOptions({ region: 'asia-south1', maxInstances: 10 })
 const MAX_OUTGOING = 5
 const X_USERNAME_REGEX = /^[a-z0-9_]{1,15}$/
 const CALLABLE_OPTIONS = { invoker: 'public', enforceAppCheck: true }
-const PRIVACY_VERSION = '2026-02-12'
-const TERMS_VERSION = '2026-02-12'
-const CONSENT_TEXT_VERSION = '2026-02-12'
+const PRIVACY_VERSION = '2026-02-14'
+const TERMS_VERSION = '2026-02-14'
+const CONSENT_TEXT_VERSION = '2026-02-14'
 const MINIMUM_AGE = 18
 const REPORT_RETENTION_MS = 180 * 24 * 60 * 60 * 1000
 const REPORT_DETAIL_MAX_CHARS = 500
@@ -407,7 +407,7 @@ exports.addAdmirer = onCall(CALLABLE_OPTIONS, async (request) => {
     const toIndexRef = db.collection('usernameIndex').doc(toUsername)
     const toIndexSnap = await tx.get(toIndexRef)
     if (!toIndexSnap.exists) {
-      throw new HttpsError('failed-precondition', 'Could not add admirer with that username.')
+      throw new HttpsError('failed-precondition', 'Could not send a signal to that username.')
     }
 
     const toUid = toIndexSnap.data().uid
@@ -441,7 +441,7 @@ exports.addAdmirer = onCall(CALLABLE_OPTIONS, async (request) => {
     }
 
     if (outgoingCount >= MAX_OUTGOING) {
-      throw new HttpsError('resource-exhausted', `You can add max ${MAX_OUTGOING} secret admirers.`)
+      throw new HttpsError('resource-exhausted', `You can send up to ${MAX_OUTGOING} active signals.`)
     }
 
     const incomingCount = toStatsSnap.exists ? Number(toStatsSnap.data().incomingCount || 0) : 0

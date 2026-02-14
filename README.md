@@ -1,18 +1,19 @@
-# Secret Admirer
+# MutualWink
 
-X-login-only admirer app with reveal-on-match logic, consent gating, and safety controls.
+MutualWink is a trust-first X-login app for private attraction signals with reveal-on-match logic, consent gating, and safety controls.
 
-## Live URL
+## Live URLs
 
-- https://secret-admirer-app.web.app
+- https://mutualwink.com
+- https://secret-admirer-app.web.app (legacy redirect)
 
 ## Features
 
 - Login only with X (`twitter.com` via Firebase Auth)
-- Username-based identity and auto-sync after login
-- Add up to 5 secret admirers
+- Username-based identity with profile sync after login
+- Send up to 5 private signals
 - Reveal names only on two-way match
-- Privacy Policy and Terms/Acceptable Use pages (`/privacy`, `/terms`)
+- Privacy Policy and Terms pages (`/privacy`, `/terms`)
 - Required consent capture (18+ + policy acceptance)
 - Report user flow with retention metadata (`reports.purgeAt`)
 - Block/unblock tooling (blocked users cannot interact)
@@ -54,13 +55,13 @@ X-login-only admirer app with reveal-on-match logic, consent gating, and safety 
 - Legal owner: Shivam Kumar
 - Contact/support/privacy/abuse/deletion email: `shivam7@outlook.in`
 - Governing location: Bihar, India
-- Policy effective/version baseline: February 12, 2026
+- Policy effective/version baseline: February 14, 2026
 - Minimum age: 18+
 - Abuse report retention: 180 days
 
 ## Moderation and deletion behavior
 
-- Blocking is bidirectional for interaction enforcement: blocked users cannot add each other as admirers.
+- Blocking is bidirectional for interaction enforcement: blocked users cannot send signals to each other.
 - Dashboard hides matches/sent entries for users blocked in either direction.
 - Account deletion removes user-linked profile/graph data and auth account.
 - Reports filed by deleting users are deleted.
@@ -84,6 +85,6 @@ Deploy functions first, then hosting/rules:
 - Functions:
   - `firebase deploy --only functions`
 - Hosting + Firestore rules:
-  - `firebase deploy --only firestore:rules,hosting`
+  - `firebase deploy --only firestore:rules,hosting:app,hosting:www,hosting:legacy`
 
 > Note: Callable functions enforce Firebase App Check in production.

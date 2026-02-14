@@ -20,7 +20,7 @@ function ConsentGateSection({ consentPending, onAccept }: ConsentGateSectionProp
       >
         <h2 className="section-title">One final step</h2>
         <p className="section-subtitle">
-          We need explicit acceptance before enabling matches, admirer actions, and safety controls.
+          We need explicit acceptance before enabling matches, signal actions, and safety controls.
         </p>
 
         <div className="feature-list">

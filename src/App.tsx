@@ -111,7 +111,7 @@ type DeleteMyAccountResponse = {
 }
 
 const X_USERNAME_REGEX = /^[a-z0-9_]{1,15}$/
-const AUTH_REDIRECT_RECOVERY_KEY = 'sa_auth_redirect_recovery'
+const AUTH_REDIRECT_RECOVERY_KEY = 'mw_auth_redirect_recovery'
 
 const REDIRECT_RECOVERY_CODES = new Set([
   'auth/popup-blocked',
@@ -528,13 +528,13 @@ function App() {
       if (data.match) {
         setNotice(`It's a match. You and @${data.toUsername} liked each other.`)
       } else {
-        setNotice(`Secret admirer added for @${data.toUsername}`)
+        setNotice(`Signal sent to @${data.toUsername}`)
       }
 
       setToUsername('')
       await refreshDashboard()
     } catch (err: unknown) {
-      setError(readErrorMessage(err, 'Could not add admirer.'))
+      setError(readErrorMessage(err, 'Could not send signal.'))
     } finally {
       setAddPending(false)
     }
@@ -694,8 +694,8 @@ function App() {
       <>
         <Toaster richColors closeButton position="top-right" />
         <LoadingScreen
-          title="Secret Admirer"
-          message={setupInProgress ? 'Setting up your profile...' : 'Preparing your private space...'}
+          title="MutualWink"
+          message={setupInProgress ? 'Setting up your profile...' : 'Preparing your mutual reveal space...'}
         />
       </>
     )
@@ -707,19 +707,19 @@ function App() {
         <Toaster richColors closeButton position="top-right" />
         <AppShell
           sectionLabel="Welcome"
-          eyebrow="Secret Space"
-          title="Private admiration without public pressure"
-          subtitle="A cinematic space for mutual signals. Names are revealed only when both people choose each other."
+          eyebrow="Mutual Reveal"
+          title="Private signals without public pressure"
+          subtitle="A trust-first experience for mutual intent. Names reveal only when both people choose each other."
           footer={sharedFooter}
           heroAside={
             <>
               <div className="hero-badge">
-                <h3>Trust-first</h3>
-                <p>Safety controls and policy consent are always visible before use.</p>
+                <h3>Consent-first</h3>
+                <p>Policy consent and safety controls are visible before any interaction starts.</p>
               </div>
               <div className="hero-badge">
-                <h3>Quiet by default</h3>
-                <p>No reveal unless both users submit admiration.</p>
+                <h3>Private by default</h3>
+                <p>No reveal unless both users send a signal.</p>
               </div>
             </>
           }
@@ -742,9 +742,9 @@ function App() {
         <Toaster richColors closeButton position="top-right" />
         <AppShell
           sectionLabel="Consent"
-          eyebrow="Policy Gate"
+          eyebrow="Trust Gate"
           title="Review and accept policies to continue"
-          subtitle="Before using admirer and safety features, please accept our Privacy Policy and Terms."
+          subtitle="Before using mutual reveal and safety features, please accept our Privacy Policy and Terms."
           username={dashboardView.username}
           actions={
             <button type="button" className="btn btn-secondary" onClick={handleSignOut}>
@@ -778,7 +778,7 @@ function App() {
       <Toaster richColors closeButton position="top-right" />
       <AppShell
         sectionLabel={isSettingsPage ? 'Settings' : 'Dashboard'}
-        eyebrow={isSettingsPage ? 'Safety and Controls' : 'Mutual Reveal Experience'}
+        eyebrow={isSettingsPage ? 'Safety and Controls' : 'Mutual Reveal Engine'}
         title={isSettingsPage ? 'Settings and account controls' : 'Mutual feelings, revealed only on a match'}
         subtitle={
           isSettingsPage
@@ -809,7 +809,7 @@ function App() {
           <>
             <div className="hero-badge">
               <h3>Real-time clarity</h3>
-              <p>Track admirers, sent signals, and matches in one private timeline.</p>
+              <p>Track incoming signals, sent signals, and matches in one private timeline.</p>
             </div>
             <div className="hero-badge">
               <h3>Safety first</h3>

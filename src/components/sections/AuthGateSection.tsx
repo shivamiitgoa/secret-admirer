@@ -20,25 +20,25 @@ function AuthGateSection({ loginConsentChecked, loginPending, onConsentChange, o
         animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
         transition={{ duration: 0.34, ease: 'easeOut' }}
       >
-        <p className="hero-micro">Private by design</p>
-        <h1 className="panel-title">Admiration stays secret until it is mutual.</h1>
+        <p className="hero-micro">Mutual by design</p>
+        <h1 className="panel-title">Send private signals. Reveal only on a true match.</h1>
         <p className="panel-lead">
-          Connect your X account, add the handle you like, and only reveal names when both sides choose each other.
-          Quiet confidence. No public pressure.
+          MutualWink is built for low-pressure connection. Add an X handle privately and names unlock only when both
+          people choose each other.
         </p>
 
         <div className="feature-list">
           <div className="feature-item">
             <Sparkles size={16} aria-hidden="true" />
-            <p>Your admirers remain invisible unless both people match.</p>
+            <p>Your private signals stay hidden until there is mutual intent.</p>
           </div>
           <div className="feature-item">
             <ShieldCheck size={16} aria-hidden="true" />
-            <p>Built-in reporting and blocking controls keep the experience safer.</p>
+            <p>Integrated reporting and blocking controls keep the experience safer.</p>
           </div>
           <div className="feature-item">
             <Lock size={16} aria-hidden="true" />
-            <p>Authentication is restricted to verified X sessions only.</p>
+            <p>Sign-in is restricted to verified X sessions and policy consent.</p>
           </div>
         </div>
       </motion.article>

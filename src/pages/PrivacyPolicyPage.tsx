@@ -12,11 +12,11 @@ function PrivacyPolicyPage() {
         animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
         transition={{ duration: 0.32, ease: 'easeOut' }}
       >
-        <p className="hero-micro">Secret Admirer</p>
+        <p className="hero-micro">MutualWink</p>
         <h1>Privacy Policy</h1>
-        <p className="hero-lead">Effective date: February 12, 2026</p>
+        <p className="hero-lead">Effective date: February 14, 2026</p>
         <p className="hero-lead">
-          This policy explains how Secret Admirer collects, uses, and protects information when you use this app.
+          This policy explains how MutualWink collects, uses, and protects information when you use this app.
         </p>
       </motion.header>
 

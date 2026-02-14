@@ -5,12 +5,12 @@ type BrandMarkProps = {
   alt?: string
 }
 
-function BrandMark({ size = 38, className, decorative = false, alt = 'Secret Admirer logo' }: BrandMarkProps) {
+function BrandMark({ size = 38, className, decorative = false, alt = 'MutualWink logo' }: BrandMarkProps) {
   const resolvedAlt = decorative ? '' : alt
 
   return (
     <img
-      src="/secret-admirer-mark.svg"
+      src="/mutualwink-mark.svg"
       width={size}
       height={size}
       className={className}

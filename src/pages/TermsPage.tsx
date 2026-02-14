@@ -12,10 +12,10 @@ function TermsPage() {
         animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
         transition={{ duration: 0.32, ease: 'easeOut' }}
       >
-        <p className="hero-micro">Secret Admirer</p>
+        <p className="hero-micro">MutualWink</p>
         <h1>Terms of Service & Acceptable Use</h1>
-        <p className="hero-lead">Effective date: February 12, 2026</p>
-        <p className="hero-lead">By using Secret Admirer, you agree to these terms.</p>
+        <p className="hero-lead">Effective date: February 14, 2026</p>
+        <p className="hero-lead">By using MutualWink, you agree to these terms.</p>
       </motion.header>
 
       <section className="legal-grid">
@@ -49,7 +49,7 @@ function TermsPage() {
           <h2>Safety tools and enforcement</h2>
           <ul>
             <li>Users can report and block accounts.</li>
-            <li>Blocked users cannot interact with each other through admirer actions.</li>
+            <li>Blocked users cannot interact with each other through signal actions.</li>
             <li>We may limit, suspend, or terminate access for policy violations or abuse.</li>
           </ul>
         </section>

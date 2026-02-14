@@ -1,0 +1,23 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="mwLogoBg" x1="12" y1="8" x2="118" y2="120" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F97316"/>
+      <stop offset="1" stop-color="#0F172A"/>
+    </linearGradient>
+    <linearGradient id="mwWordHeart" x1="28" y1="28" x2="100" y2="98" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFBEB"/>
+      <stop offset="1" stop-color="#FFEDD5"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="128" height="128" rx="30" fill="url(#mwLogoBg)"/>
+
+  <rect x="18" y="28" width="92" height="72" rx="14" fill="#0B1220" fill-opacity="0.35"/>
+  <rect x="18" y="28" width="92" height="72" rx="14" stroke="rgba(255,255,255,0.2)" stroke-width="2"/>
+
+  <path d="M30 45L64 68L98 45" stroke="#FFEDD5" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <path d="M42 53C42 46.373 47.373 41 54 41C58.621 41 62.634 43.597 64.7 47.38C66.767 43.597 70.779 41 75.4 41C82.027 41 87.4 46.373 87.4 53C87.4 63.892 77.738 71.764 64.7 81C51.662 71.764 42 63.892 42 53Z" fill="url(#mwWordHeart)"/>
+
+  <path d="M56 62L62.2 68.2L75.5 54.9" stroke="#C2410C" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

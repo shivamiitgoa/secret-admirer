@@ -134,7 +134,7 @@ function SettingsPage({
         transition={{ duration: 0.34, delay: reduceMotion ? 0 : 0.06, ease: 'easeOut' }}
       >
         <h2 className="section-title">Blocked accounts</h2>
-        <p className="section-subtitle">Blocked users cannot interact with you in admirer flows.</p>
+        <p className="section-subtitle">Blocked users cannot interact with you in signal flows.</p>
 
         <form onSubmit={onBlockSubmit} className="form-stack" aria-busy={blockPending}>
           <label className="label">
@@ -198,7 +198,7 @@ function SettingsPage({
       >
         <h2 className="section-title">Danger Zone</h2>
         <p className="section-subtitle">
-          Account deletion removes your profile and admirer data immediately. Reports you filed are removed; reports
+          Account deletion removes your profile and signal data immediately. Reports you filed are removed; reports
           received against your account are anonymized.
         </p>
 

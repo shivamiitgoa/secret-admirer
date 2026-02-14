@@ -39,7 +39,7 @@ function AppShell({
           <BrandMark className="brand-mark brand-mark-img" decorative />
           <span className="brand-meta">
             <span className="brand-eyebrow">{sectionLabel}</span>
-            <span className="brand-title">Secret Admirer</span>
+            <span className="brand-title">MutualWink</span>
           </span>
         </div>
 

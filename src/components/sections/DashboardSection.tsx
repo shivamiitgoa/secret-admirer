@@ -59,9 +59,9 @@ function DashboardSection({
           animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
           transition={{ duration: 0.32, ease: 'easeOut' }}
         >
-          <h2 className="section-title">Add a secret admirer</h2>
+          <h2 className="section-title">Send a private signal</h2>
           <p className="section-subtitle">
-            Enter an X handle. Only mutual admiration reveals both names to both people.
+            Enter an X handle. Names reveal only when both people choose each other.
           </p>
 
           <div className="form-stack">
@@ -83,12 +83,12 @@ function DashboardSection({
 
             <button type="submit" className="btn btn-primary" disabled={addPending || !canAdd}>
               <Plus size={16} aria-hidden="true" />
-              {addPending ? 'Adding admirer...' : 'Add admirer'}
+              {addPending ? 'Sending signal...' : 'Send signal'}
             </button>
 
             <div className="inline-note-wrap">
-              {outgoingCount >= maxOutgoing ? <p className="inline-note">You have reached your admirer limit.</p> : null}
-              {!hasSyncedProfile ? <p className="inline-note">Finish profile sync before adding admirers.</p> : null}
+              {outgoingCount >= maxOutgoing ? <p className="inline-note">You have reached your signal limit.</p> : null}
+              {!hasSyncedProfile ? <p className="inline-note">Finish profile sync before sending signals.</p> : null}
             </div>
           </div>
         </motion.form>
@@ -124,7 +124,7 @@ function DashboardSection({
           <h2 className="section-title">Your dashboard</h2>
           <div className="stats-grid" role="list" aria-label="Profile stats">
             <div className="stat-card" role="listitem">
-              <p className="stat-label">Secret admirers</p>
+              <p className="stat-label">Received signals</p>
               <strong className="stat-value">{incomingCount}</strong>
             </div>
             <div className="stat-card" role="listitem">
@@ -166,7 +166,7 @@ function DashboardSection({
           animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
           transition={{ duration: 0.36, delay: reduceMotion ? 0 : 0.1, ease: 'easeOut' }}
         >
-          <h2 className="section-title">Sent admirers</h2>
+          <h2 className="section-title">Sent signals</h2>
           {sentAdmirers.length ? (
             <ul className="vertical-list">
               {sentAdmirers.map((sent) => (
@@ -187,7 +187,7 @@ function DashboardSection({
               ))}
             </ul>
           ) : (
-            <p className="section-empty">No admirers sent yet. Add your first handle from the card on the left.</p>
+            <p className="section-empty">No signals sent yet. Add your first handle from the panel on the left.</p>
           )}
         </motion.article>
 
