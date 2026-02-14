@@ -1,11 +1,11 @@
-# Sora Prompt - MutualWink Launch Teaser (30s)
+# Sora Prompt - MutualWink Launch Teaser (10s)
 
-Create a 30-second cinematic launch teaser for "MutualWink".
+Create a 10-second cinematic launch teaser for "MutualWink".
 
 Format and output:
 - Primary aspect ratio: 16:9
 - Must adapt cleanly to 9:16 crops
-- Deliver one master 30s cut suitable for social and homepage hero video
+- Deliver one master 10s cut suitable for social and homepage hero video
 
 Narrative arc:
 1. Problem: fear of rejection and uncertainty around crushes
@@ -22,10 +22,10 @@ Visual direction:
 - Use abstract or generic UI-evoking overlays only; do not fake real profile screenshots
 
 Pacing and scene guidance:
-- 0-6s: Quiet hesitation and overthinking (checking phone, typing and deleting, nervous pause)
-- 6-14s: Transition to private confidence (clean UI-inspired overlays showing "private signal")
-- 14-22s: Trust moment (message indicates reveal happens only on mutual feelings)
-- 22-30s: Warm payoff (two people smiling after mutual confirmation, end card)
+- 0-3s: Quiet hesitation and overthinking (checking phone, typing and deleting, nervous pause)
+- 3-6s: Transition to private confidence (clean UI-inspired overlays showing "private signal")
+- 6-8s: Trust moment (message indicates reveal happens only on mutual feelings)
+- 8-10s: Warm payoff (smile after mutual confirmation, then branded end card)
 
 Required on-screen copy (exact text):
 - "Private signals. Mutual reveal."

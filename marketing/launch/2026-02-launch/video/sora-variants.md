@@ -1,13 +1,13 @@
 # Sora Variants - 2026-02 Launch
 
-## Variant A: 15s vertical cutdown (9:16)
+## Variant A: 10s vertical cut (9:16)
 
 Goal: fast social reel/shorts version focused on the core USP.
 
 Timing:
-- 0-4s: fear of rejection moment
-- 4-10s: private signal + mutual reveal rule
-- 10-15s: payoff + end card
+- 0-3s: fear of rejection moment
+- 3-7s: private signal + mutual reveal rule
+- 7-10s: payoff + end card
 
 Required text:
 - "Private signals. Mutual reveal."
@@ -18,14 +18,14 @@ Notes:
 - Keep shots tightly framed for vertical composition.
 - Reduce text count to preserve clarity on small screens.
 
-## Variant B: Hook-first teaser (30s)
+## Variant B: Hook-first teaser (10s)
 
 Open with bold hook text in first 2 seconds:
 - "What if your crush only knew when it was mutual?"
 
-Then follow the same arc as master prompt with slightly faster first half.
+Then follow the same arc as master prompt in a compressed 10-second sequence.
 
-## Variant C: Privacy-first teaser (30s)
+## Variant C: Privacy-first teaser (10s)
 
 Emphasize account anonymity before reveal mechanics.
 

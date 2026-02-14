@@ -24,9 +24,9 @@
 
 ## Export package
 
-- 30s master (16:9)
-- 15s cutdown (9:16)
-- Optional hook-first version
+- 10s master (16:9)
+- 10s vertical (9:16)
+- Optional 10s hook-first version
 - Thumbnail frame selected
 
 ## QA signoff
